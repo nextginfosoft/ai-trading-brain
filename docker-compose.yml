@@ -60,21 +60,23 @@ services:
     networks:
       - trading-network
 
-  # Optional: Monitoring/Dashboard container
+  # Monitoring/Dashboard container — read-only web dashboard (FastAPI + React).
+  # Service name kept as streamlit-dashboard so existing deploy scripts keep working.
+  # Legacy Streamlit UI: `streamlit run control_tower/dashboard_app.py` (still in the image).
   streamlit-dashboard:
     build: .
     container_name: trading-dashboard
     restart: always
-    
-    command: streamlit run control_tower/dashboard_app.py --server.port=8501 --server.address=0.0.0.0
-    
+
+    command: python -m web_dashboard.server
+
     volumes:
       - ./data:/app/data:ro
-      - ./control_tower:/app/control_tower:ro
       - .env:/app/.env:ro          # GAP-026: dashboard reads config env vars
 
     environment:
       - TZ=Asia/Kolkata   # Match trading brain — all timestamps are IST
+      - DASHBOARD_PORT=8501
 
     mem_limit: 1g
     cpus: '0.5'

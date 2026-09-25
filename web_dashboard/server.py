@@ -29,6 +29,12 @@ app = FastAPI(title="AI Trading Brain Dashboard", docs_url="/api/docs", openapi_
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
+@app.get("/healthz", include_in_schema=False)
+def healthz() -> dict:
+    """Liveness probe used by the Dockerfile HEALTHCHECK."""
+    return {"ok": True, "frontend_built": os.path.isdir(DIST_DIR)}
+
+
 @app.get("/api/overview")
 def overview() -> dict:
     trades = data.trades_summary()

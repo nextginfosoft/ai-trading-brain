@@ -1,5 +1,7 @@
 .git
 .gitignore
+web_dashboard/frontend/node_modules
+web_dashboard/frontend/dist
 .github
 .venv
 venv
