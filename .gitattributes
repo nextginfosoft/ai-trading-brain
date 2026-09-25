@@ -1,3 +1,6 @@
 ﻿# Force Unix LF on files that must not have CRLF on Linux
 *.cron text eol=lf
 *.sh text eol=lf
+
+# Binary documents: never convert line endings (would corrupt PDF byte offsets)
+*.pdf binary

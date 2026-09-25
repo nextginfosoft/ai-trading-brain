@@ -80,7 +80,7 @@ WARN = ParagraphStyle("Warn", parent=NOTE, backColor=CORAL_SOFT)
 # ── Doc template with TOC + header/footer ────────────────────────────────────
 class WorkflowDoc(BaseDocTemplate):
     def __init__(self, path: str, **kw):
-        super().__init__(path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
+        super().__init__(path, pagesize=A4, pageCompression=1, leftMargin=MARGIN, rightMargin=MARGIN,
                          topMargin=MARGIN + 6, bottomMargin=MARGIN, title="TradeSense AI - System Workflow",
                          author="TradeSense AI", subject="System workflow reference", **kw)
         frame = Frame(MARGIN, MARGIN, PAGE_W - 2 * MARGIN, PAGE_H - 2 * MARGIN - 6, id="f")
