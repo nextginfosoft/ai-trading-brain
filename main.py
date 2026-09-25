@@ -12,7 +12,7 @@ Usage:
   python main.py --readiness     # Run system readiness checklist
   python main.py --paper         # Run in paper trading mode (no live orders)
   python main.py --pilot         # Run with pilot capital rules (₹20k, max 2 trades)
-  python main.py --telegram      # Start Telegram command bot (@Amitkhatkarbot)
+  python main.py --telegram      # Start Telegram command bot (@TradeSenseAI_bot)
 """
 
 import argparse
@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pilot",     action="store_true",
                         help="Run with pilot capital rules (₹20k, max 2 trades)")
     parser.add_argument("--telegram",  action="store_true",
-                        help="Start Telegram command bot (@Amitkhatkarbot) and block")
+                        help="Start Telegram command bot (@TradeSenseAI_bot) and block")
     parser.add_argument("--status",    action="store_true",
                         help="Print running status (PID, mode, start time) and exit")
     return parser.parse_args()
