@@ -77,14 +77,13 @@ _PACKAGES: list[PackageSpec] = [
     PackageSpec("yfinance",    "yfinance",       DependencyTier.REQUIRED,  feature="Yahoo Finance fallback feed"),
     PackageSpec("sklearn",     "scikit-learn",   DependencyTier.REQUIRED,  feature="MetaLearning k-NN predictor"),
     PackageSpec("dotenv",      "python-dotenv",  DependencyTier.REQUIRED,  feature="Environment variable loading"),
-    PackageSpec("streamlit",   "streamlit",      DependencyTier.REQUIRED,  feature="Layer 17 ControlTower dashboard"),
+    PackageSpec("fastapi",     "fastapi",        DependencyTier.REQUIRED,  feature="Layer 17 ControlTower web dashboard"),
     PackageSpec("scipy",       "scipy",          DependencyTier.REQUIRED,  feature="Statistical analysis"),
 
     # Optional — feature disabled if missing
     PackageSpec("dhanhq",      "dhanhq",         DependencyTier.OPTIONAL,  feature="Dhan primary broker"),
     PackageSpec("kiteconnect", "kiteconnect",    DependencyTier.OPTIONAL,  feature="Zerodha broker"),
     PackageSpec("telegram",    "python-telegram-bot", DependencyTier.OPTIONAL, feature="13 operator Telegram commands"),
-    PackageSpec("plotly",      "plotly",         DependencyTier.OPTIONAL,  feature="Dashboard interactive charts"),
     PackageSpec("ta",          "ta",             DependencyTier.OPTIONAL,  feature="Technical indicators (RSI, MACD, ATR)"),
     PackageSpec("cryptography","cryptography",   DependencyTier.OPTIONAL,  feature="INFRA-ENC-001 EncryptionService"),
     PackageSpec("tqdm",        "tqdm",           DependencyTier.OPTIONAL,  feature="Progress bars"),

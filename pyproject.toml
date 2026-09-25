@@ -80,8 +80,8 @@ dependencies = [
     "python-telegram-bot>=20.7",
 
     # --- Dashboard (Layer 17 ControlTower) -----------------------------------
-    "streamlit>=1.32.0",
-    "plotly>=5.20.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 
     # --- Logging -------------------------------------------------------------
     "loguru>=0.7.0",
@@ -197,7 +197,7 @@ known_first_party   = ["enterprise_ai_platform"]
 known_third_party   = [
     "pandas", "numpy", "scipy", "sklearn",
     "yfinance", "dhanhq", "kiteconnect",
-    "requests", "streamlit", "loguru",
+    "requests", "fastapi", "loguru",
     "telegram", "schedule", "ta",
     "cryptography", "dotenv", "pytz",
 ]
@@ -274,11 +274,11 @@ files                  = ["enterprise_ai_platform/", "tests/"]
 [[tool.mypy.overrides]]
 module = [
     "yfinance.*", "dhanhq.*", "kiteconnect.*",
-    "streamlit.*", "sklearn.*", "scipy.*",
+    "sklearn.*", "scipy.*",
     "nsepython.*", "telegram.*", "schedule.*",
     "logzero.*", "smartapi.*", "pyotp.*",
     "tqdm.*", "websocket.*", "loguru.*",
-    "ta.*", "plotly.*",
+    "ta.*",
 ]
 ignore_missing_imports = true
 
@@ -310,7 +310,6 @@ filterwarnings = [
     "ignore::DeprecationWarning:yfinance",
     "ignore::DeprecationWarning:kiteconnect",
     "ignore::PendingDeprecationWarning",
-    "ignore::UserWarning:streamlit",
     "ignore::ResourceWarning:sqlite3",
     "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
