@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+
+/* Dark trading-terminal theme. Chart colors validated with the dataviz
+   palette validator against --color-panel (#12151a):
+   - profit/loss marks: blue #3987e5 / red #e66767 (diverging pair, CVD-safe)
+   - ordinal ramp (funnel): blue 600→200 steps
+   Text never wears a series color; P&L text uses status tokens + a sign. */
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-page: #0b0d10;
+  --color-panel: #12151a;
+  --color-panel-2: #181c22;
+  --color-panel-3: #1f242b;
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-line-strong: rgb(255 255 255 / 0.13);
+  --color-grid: #23272e;
+
+  --color-ink: #e8eaed;
+  --color-ink-2: #a3a9b1;
+  --color-ink-3: #6f767f;
+
+  --color-accent: #3987e5;
+  --color-accent-soft: rgb(57 135 229 / 0.12);
+
+  --color-profit: #1fb85a;
+  --color-profit-soft: rgb(31 184 90 / 0.12);
+  --color-loss: #e66767;
+  --color-loss-soft: rgb(230 103 103 / 0.12);
+  --color-warn: #fab219;
+  --color-warn-soft: rgb(250 178 25 / 0.12);
+
+  --color-series-up: #3987e5;
+  --color-series-down: #e66767;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3038;
+  border-radius: 8px;
+  border: 2px solid var(--color-page);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
