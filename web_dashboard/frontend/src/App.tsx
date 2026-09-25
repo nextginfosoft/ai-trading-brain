@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { Activity, CandlestickChart, Filter, LayoutDashboard, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { KiteConnectControl, KiteReturnBanner } from './components/KiteConnect'
 import { LogoMark, Wordmark } from './components/Logo'
 import { Badge, QueryState, type Tone } from './components/ui'
 import { logout, onUnauthorized, useOverview, useSession, type Session } from './lib/api'
@@ -51,6 +52,7 @@ function StatusBar() {
             </Badge>
           )
         )}
+        <KiteConnectControl />
       </div>
       <span className="flex items-center gap-1.5 text-ink-2">
         <span
@@ -175,6 +177,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
           <div className="mx-auto max-w-[1440px]">
+            <KiteReturnBanner />
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/trades" element={<TradesPage />} />

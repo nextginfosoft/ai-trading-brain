@@ -82,6 +82,36 @@ def test_stranger_dm_is_rejected(bot):
     assert "Unauthorized" in bot.sent[-1][1]
 
 
+def _kite_bot(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", GROUP_ID)
+    monkeypatch.setenv("DASHBOARD_PUBLIC_URL", "https://dash.example")
+    b = TelegramCommandBot()
+    b.pushed = []
+    b.push = lambda text, parse_mode="HTML": b.pushed.append(text)
+    return b
+
+
+def test_kite_startup_message_reflects_connection(monkeypatch):
+    b = _kite_bot(monkeypatch)
+    assert b._kite_reminders(False, False, "", "", "2026-09-28", 0, 7, 0)[0] is True
+    assert "not connected" in b.pushed[-1] and "https://dash.example" in b.pushed[-1]
+    b._kite_reminders(True, False, "", "", "2026-09-28", 0, 7, 0)
+    assert "connected" in b.pushed[-1] and "not connected" not in b.pushed[-1]
+
+
+def test_kite_morning_reminder_once_per_weekday_only_when_disconnected(monkeypatch):
+    b = _kite_bot(monkeypatch)
+    state = b._kite_reminders(False, True, "", "", "2026-09-28", 0, 8, 31)   # Monday 08:31
+    assert len(b.pushed) == 1 and "Zerodha login needed" in b.pushed[0]
+    b._kite_reminders(False, *state, "2026-09-28", 0, 8, 35)                   # same day: no repeat
+    b._kite_reminders(True, True, "", "", "2026-09-29", 1, 8, 31)             # connected: silent
+    b._kite_reminders(False, True, "", "", "2026-10-03", 5, 8, 31)            # Saturday: silent
+    assert len(b.pushed) == 1
+    b._kite_reminders(False, True, "2026-09-28", "", "2026-09-28", 0, 9, 16)  # 09:15 nudge
+    assert "Market is OPEN" in b.pushed[-1]
+
+
 def test_private_owner_setup_still_works(monkeypatch):
     """Legacy: bot bound to the owner's private chat, no whitelist configured."""
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")

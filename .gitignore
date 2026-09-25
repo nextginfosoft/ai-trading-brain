@@ -71,6 +71,9 @@ logs/
 *.log.*
 
 # ── IIOS Runtime data ─────────────────────────────────────────────────────────
+# Broker session tokens (Kite access token etc.) — secrets, never commit
+data/broker/
+
 # data/ contains a mix of static reference data (tracked) and live runtime
 # state (must NOT be tracked). Persistence across deploys/restarts comes
 # from the Docker bind mount (./data:/app/data in docker-compose.yml) —

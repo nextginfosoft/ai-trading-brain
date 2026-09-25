@@ -5,22 +5,30 @@ Run:
     python -m web_dashboard.server            # http://localhost:8501
 
 Serves a JSON API under /api/* and the built React app (web_dashboard/frontend/dist).
-Data endpoints are GET-only; nothing here can change trading state.
+Data endpoints are GET-only; nothing here can place, change or cancel trades.
 Every /api/* route except /api/auth/* requires a password login (see auth.py).
+The only writes are the Zerodha (Kite) daily login session: /api/kite/* and
+/kite/callback, which store the broker access token for the engine to use.
 """
 
 from __future__ import annotations
 
 import os
+import secrets
+import threading
+import time
 from datetime import datetime
+from typing import Dict
+from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from broker_auth import kite_session
 from web_dashboard import auth, data
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -166,6 +174,77 @@ def health() -> dict:
 @app.get("/api/eod")
 def eod() -> dict:
     return data.eod_report()
+
+
+# ── Zerodha (Kite) daily login ───────────────────────────────────────────────
+
+class _KiteStateStore:
+    """One-time `state` values for the Kite login round-trip (10-minute TTL).
+
+    /kite/callback is reached by a cross-site redirect from kite.zerodha.com, so
+    the SameSite=Strict session cookie is not sent. Only a logged-in dashboard
+    user can obtain a state (via /api/kite/login), and each one works once.
+    """
+
+    TTL_SECONDS = 600
+
+    def __init__(self) -> None:
+        self._states: Dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def issue(self) -> str:
+        state = secrets.token_urlsafe(24)
+        with self._lock:
+            now = time.monotonic()
+            self._states = {s: t for s, t in self._states.items() if now - t < self.TTL_SECONDS}
+            self._states[state] = now
+        return state
+
+    def consume(self, state: str) -> bool:
+        with self._lock:
+            issued = self._states.pop(state, None)
+        return issued is not None and time.monotonic() - issued < self.TTL_SECONDS
+
+
+kite_states = _KiteStateStore()
+
+
+def _kite_redirect(outcome: str, reason: str = "") -> RedirectResponse:
+    query = {"kite": outcome, **({"reason": reason} if reason else {})}
+    return RedirectResponse(f"/?{urlencode(query)}", status_code=303)
+
+
+@app.get("/api/kite/status")
+def kite_status() -> dict:
+    return kite_session.public_status()
+
+
+@app.post("/api/kite/login")
+def kite_login() -> JSONResponse:
+    if not kite_session.is_configured():
+        return JSONResponse({"detail": "KITE_API_KEY / KITE_API_SECRET are not set on the server"},
+                            status_code=503)
+    return JSONResponse({"url": kite_session.login_url(kite_states.issue())})
+
+
+@app.post("/api/kite/disconnect")
+def kite_disconnect() -> dict:
+    kite_session.clear_session()
+    return kite_session.public_status()
+
+
+@app.get("/kite/callback", include_in_schema=False)
+def kite_callback(request_token: str = "", status: str = "", state: str = "") -> RedirectResponse:
+    """Zerodha redirects here after login (register this URL in the Kite developer console)."""
+    if not kite_states.consume(state):
+        return _kite_redirect("error", "Login link expired or invalid — click Connect Zerodha again")
+    if status != "success" or not request_token:
+        return _kite_redirect("error", "Zerodha login was cancelled or failed")
+    try:
+        kite_session.exchange_request_token(request_token)
+    except Exception as exc:  # network / invalid token / wrong secret
+        return _kite_redirect("error", f"Token exchange failed: {type(exc).__name__}")
+    return _kite_redirect("connected")
 
 
 if os.path.isdir(DIST_DIR):
