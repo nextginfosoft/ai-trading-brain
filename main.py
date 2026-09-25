@@ -72,7 +72,7 @@ def is_running_in_docker() -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="AI Trading Brain — Hierarchical Multi-Agent System"
+        description="TradeSense AI — Hierarchical Multi-Agent System"
     )
     parser.add_argument("--schedule",  action="store_true",
                         help="Run on intraday schedule (daemon)")
@@ -147,7 +147,7 @@ def main():
     log.info("[Guard] Running inside Docker — single runtime enforced.")
 
     log.info("=" * 65)
-    log.info("  AI TRADING BRAIN  |  HIERARCHICAL MULTI-AGENT SYSTEM")
+    log.info("  TRADESENSE AI  |  HIERARCHICAL MULTI-AGENT SYSTEM")
     log.info("  Layers: 17  |  Agents: ~62  |  Date: %s",
              _dt.now().strftime("%Y-%m-%d"))
     log.info("=" * 65)

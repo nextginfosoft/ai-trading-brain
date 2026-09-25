@@ -1,4 +1,8 @@
-# Investment Intelligence Operating System (IIOS)
+# TradeSense AI
+
+<img src="web_dashboard/frontend/public/favicon.svg" width="64" alt="TradeSense AI logo">
+
+*Built on the Investment Intelligence Operating System (IIOS).*
 
 > **Status:** Foundation Certified — Wave 1 Implementation Ready  
 > **Foundation:** IIOS-FCR-001 | **Architecture:** IIOS-ARC-001  

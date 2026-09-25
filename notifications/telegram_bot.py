@@ -183,7 +183,7 @@ class TelegramCommandBot:
                     _startup_done = True
                     if not dhan_live:
                         self.push(
-                            "🔑 <b>AI Trading Brain is online!</b>\n"
+                            "🔑 <b>TradeSense AI is online!</b>\n"
                             "━━━━━━━━━━━━━━━━━━━━━\n"
                             "Dhan API is in <b>simulation mode</b> — live market data is unavailable.\n\n"
                             "Please paste your fresh Dhan access token:\n\n"
@@ -194,7 +194,7 @@ class TelegramCommandBot:
                         log.info("[TelegramBot] Startup Dhan token prompt sent.")
                     else:
                         self.push(
-                            "✅ <b>AI Trading Brain is online!</b>\n"
+                            "✅ <b>TradeSense AI is online!</b>\n"
                             "Dhan feed is <b>LIVE</b> — live data active. 📈"
                         )
                         log.info("[TelegramBot] Startup ping sent (Dhan already live).")
@@ -417,7 +417,7 @@ class TelegramCommandBot:
             reg_note = f"\n\n<b>Registered Chat ID:</b> <code>{self._chat_id}</code>"
 
         return (
-            f"🚀 <b>AI Trading Brain</b>\n"
+            f"🚀 <b>TradeSense AI</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"Hello <b>{_esc(first_name)}</b>! I'm your personal trading assistant.\n\n"
             f"I will send you real-time alerts for:\n"
