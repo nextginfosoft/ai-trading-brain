@@ -66,7 +66,7 @@ log = get_logger("run_live")
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="AI Trading Brain — live / paper trading daemon",
+        description="TradeSense AI — live / paper trading daemon",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -109,7 +109,7 @@ def main() -> None:
 
     # ── Banner ────────────────────────────────────────────────────────────────
     log.info("=" * 65)
-    log.info("  AI TRADING BRAIN  |  %s", mode_label)
+    log.info("  TRADESENSE AI  |  %s", mode_label)
     log.info("  Layers: 17  |  Agents: ~62  |  Date: %s",
              datetime.now().strftime("%Y-%m-%d"))
     log.info("=" * 65)

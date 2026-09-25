@@ -40,7 +40,7 @@ def upnl(r):
         return round((entry - ltp) * qty, 0)
 
 print("=" * 72)
-print(f"  AI TRADING BRAIN — Daily Report  |  {today}  |  11:30 IST")
+print(f"  TRADESENSE AI — Daily Report  |  {today}  |  11:30 IST")
 print("=" * 72)
 
 # ── Token check ─────────────────────────────────────────────────────────────

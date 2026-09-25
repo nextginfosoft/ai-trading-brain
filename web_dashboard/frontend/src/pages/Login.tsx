@@ -1,4 +1,5 @@
-import { BrainCircuit, Eye, EyeOff, Lock } from 'lucide-react'
+import { Eye, EyeOff, Lock } from 'lucide-react'
+import { LogoMark } from '../components/Logo'
 import { useState, type FormEvent } from 'react'
 import { login } from '../lib/api'
 
@@ -31,11 +32,14 @@ export default function LoginPage({ configured, onSuccess }: { configured: boole
     <div className="grid min-h-full place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <span className="grid size-11 place-items-center rounded-xl bg-accent-soft text-accent">
-            <BrainCircuit className="size-6" aria-hidden />
-          </span>
+          <LogoMark size={48} />
           <div>
-            <h1 className="text-lg font-semibold">AI Trading Brain</h1>
+            <h1 className="flex items-center justify-center gap-2 text-lg font-semibold tracking-tight">
+              TradeSense
+              <span className="rounded-md bg-accent-soft px-1.5 py-px text-[12px] font-semibold tracking-wide text-[#8dbdf3]">
+                AI
+              </span>
+            </h1>
             <p className="text-[13px] text-ink-3">Sign in to the control tower</p>
           </div>
         </div>

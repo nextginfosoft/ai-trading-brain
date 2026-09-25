@@ -223,7 +223,7 @@ class MasterOrchestrator:
 
     def __init__(self):
         log.info("═" * 60)
-        log.info("  AI TRADING BRAIN — Master Orchestrator Initialising")
+        log.info("  TRADESENSE AI — Master Orchestrator Initialising")
         log.info("═" * 60)
         # ── Layer 0: Data Integrity ────────────────────────────────────
         self.data_integrity      = DataIntegrityEngine()
@@ -8354,7 +8354,7 @@ class MasterOrchestrator:
                 f"EOD report will be sent at 15:35.\n"
                 f"Ready for market open at 09:15."
             )
-            n.market_alert("🟢 AI Trading Brain Online", _body)
+            n.market_alert("🟢 TradeSense AI Online", _body)
         except Exception as exc:
             log.debug("Telegram pre-market ping failed: %s", exc)
 
@@ -8817,7 +8817,7 @@ class MasterOrchestrator:
             except Exception:
                 pass
             get_notifier().market_alert(
-                "🚀 AI Trading Brain Started",
+                "🚀 TradeSense AI Started",
                 f"System is ONLINE on cloud server\n"
                 f"Date: {datetime.now().strftime('%d %b %Y, %H:%M IST')}\n"
                 f"Mode: {_mode}\n"
@@ -9202,7 +9202,7 @@ class MasterOrchestrator:
 
     def shutdown(self):
         """Gracefully shut down the task queue and publish SYSTEM_SHUTDOWN event."""
-        log.info("Shutting down AI Trading Brain…")
+        log.info("Shutting down TradeSense AI…")
         self.bus.publish(SystemEvent(
             event_type=EventType.SYSTEM_SHUTDOWN,
             source_agent="MasterOrchestrator",

@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Activity, BrainCircuit, CandlestickChart, Filter, LayoutDashboard, LogOut } from 'lucide-react'
+import { Activity, CandlestickChart, Filter, LayoutDashboard, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { LogoMark, Wordmark } from './components/Logo'
 import { Badge, QueryState, type Tone } from './components/ui'
 import { logout, onUnauthorized, useOverview, useSession, type Session } from './lib/api'
 import { duration, marketSession, num, titleCase } from './lib/format'
@@ -115,13 +116,8 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
     <div className="flex h-full min-h-0">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-line bg-panel md:flex">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <span className="grid size-8 place-items-center rounded-lg bg-accent-soft text-accent">
-            <BrainCircuit className="size-[18px]" aria-hidden />
-          </span>
-          <div className="leading-tight">
-            <div className="text-[13px] font-semibold">AI Trading Brain</div>
-            <div className="text-[11px] text-ink-3">Control tower</div>
-          </div>
+          <LogoMark size={32} />
+          <Wordmark subtitle="Control tower" />
         </div>
         <nav className="flex flex-col gap-0.5 px-2" aria-label="Main">
           {NAV.map(({ to, label, icon: Icon }) => (

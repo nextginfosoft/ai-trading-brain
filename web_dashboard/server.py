@@ -1,5 +1,5 @@
 """
-AI Trading Brain — web dashboard server (read-only).
+TradeSense AI — web dashboard server (read-only).
 
 Run:
     python -m web_dashboard.server            # http://localhost:8501
@@ -29,7 +29,7 @@ load_dotenv(os.path.join(_ROOT, ".env"))
 
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
-app = FastAPI(title="AI Trading Brain Dashboard", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="TradeSense AI Dashboard", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 throttle = auth.LoginThrottle()
 
