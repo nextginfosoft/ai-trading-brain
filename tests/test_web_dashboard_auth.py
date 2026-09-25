@@ -65,6 +65,26 @@ def test_lockout_after_repeated_failures(client):
     assert int(locked.headers["retry-after"]) > 0
 
 
+def test_client_ip_honours_forwarded_for_only_from_trusted_proxy():
+    trusted = "172.18.0.0/16, 127.0.0.1"
+    assert auth.client_ip("172.18.0.5", "203.0.113.9", trusted) == "203.0.113.9"
+    assert auth.client_ip("172.18.0.5", "10.0.0.1, 203.0.113.9", trusted) == "203.0.113.9"  # right-most hop
+    assert auth.client_ip("198.51.100.7", "203.0.113.9", trusted) == "198.51.100.7"  # untrusted peer: header ignored
+    assert auth.client_ip("172.18.0.5", None, trusted) == "172.18.0.5"
+    assert auth.client_ip("172.18.0.5", "203.0.113.9", "") == "172.18.0.5"  # nothing trusted by default
+
+
+def test_lockout_is_per_visitor_behind_proxy(client, monkeypatch):
+    # TestClient's peer host is "testclient"; trust it as if it were the reverse proxy.
+    monkeypatch.setenv("DASHBOARD_TRUSTED_PROXIES", "testclient")
+    attacker = {"X-Forwarded-For": "203.0.113.9"}
+    for _ in range(auth.MAX_FAILURES):
+        client.post("/api/auth/login", json={"password": "wrong"}, headers=attacker)
+    assert client.post("/api/auth/login", json={"password": PASSWORD}, headers=attacker).status_code == 429
+    other = {"X-Forwarded-For": "198.51.100.20"}
+    assert client.post("/api/auth/login", json={"password": PASSWORD}, headers=other).status_code == 200
+
+
 def test_fails_closed_without_configured_password(monkeypatch):
     monkeypatch.delenv("DASHBOARD_PASSWORD_HASH", raising=False)
     c = TestClient(app)

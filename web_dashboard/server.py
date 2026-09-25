@@ -41,7 +41,8 @@ throttle = auth.LoginThrottle()
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    peer = request.client.host if request.client else "unknown"
+    return auth.client_ip(peer, request.headers.get("x-forwarded-for"))
 
 
 def _is_authenticated(request: Request) -> bool:
