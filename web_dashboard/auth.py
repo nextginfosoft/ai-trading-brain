@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import ipaddress
 import os
 import secrets
 import threading
@@ -95,6 +96,40 @@ def verify_token(token: Optional[str], pw_hash: str, now: Optional[float] = None
         return int(expires) > (now or time.time())
     except (ValueError, TypeError):
         return False
+
+
+# ── Real client IP behind a reverse proxy ────────────────────────────────────
+
+def _is_trusted(peer: str, trusted_spec: str) -> bool:
+    for entry in (e.strip() for e in trusted_spec.split(",")):
+        if not entry:
+            continue
+        if entry == peer:
+            return True
+        try:
+            if ipaddress.ip_address(peer) in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def client_ip(peer: str, forwarded_for: Optional[str], trusted_spec: Optional[str] = None) -> str:
+    """
+    The visitor's IP for lockout purposes.
+
+    Behind a reverse proxy (e.g. Caddy) every request arrives from the proxy's
+    address, so the lockout would block all visitors at once. X-Forwarded-For
+    is honoured only when the direct peer is a trusted proxy — listed in
+    DASHBOARD_TRUSTED_PROXIES (comma-separated IPs/CIDRs) — so clients can't
+    spoof it. The right-most entry is the one the trusted proxy appended.
+    """
+    spec = os.getenv("DASHBOARD_TRUSTED_PROXIES", "") if trusted_spec is None else trusted_spec
+    if forwarded_for and _is_trusted(peer, spec):
+        hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
+    return peer
 
 
 # ── Brute-force lockout (in-memory, per client IP) ───────────────────────────
