@@ -1,5 +1,5 @@
 """
-Telegram Command Bot — @Amitkhatkarbot
+Telegram Command Bot — @TradeSenseAI_bot
 =======================================
 Interactive command bot that lets you query and control the AI Trading Brain
 from your Telegram app in real time.
@@ -8,7 +8,7 @@ Setup
 ------
 1. Add TELEGRAM_BOT_TOKEN to .env (already done from BotFather)
 2. Start the bot:  python main.py --telegram
-3. Open Telegram → search @Amitkhatkarbot → send  /start
+3. Open Telegram → search @TradeSenseAI_bot → send  /start
 4. The bot replies with your Chat ID — paste it into .env as TELEGRAM_CHAT_ID
 5. Restart:  python main.py --telegram   (now fully private/secured)
 
@@ -34,6 +34,12 @@ Security
 ---------
 Once TELEGRAM_CHAT_ID is set, only messages from that chat_id are processed.
 All other messages receive a "Unauthorized" reply.
+
+Group chats: TELEGRAM_CHAT_ID may be a group id (negative). Every member then
+shares that chat_id, so control commands (/pause, /resume, /token, /rescan)
+additionally require the sender's user id in TELEGRAM_WHITELIST_IDS
+(comma-separated). Listed admins may also message the bot privately.
+/token is refused in groups so a broker token is never shown to all members.
 """
 
 from __future__ import annotations
@@ -75,12 +81,23 @@ class TelegramCommandBot:
     POLL_TIMEOUT = 30        # long-poll seconds (Telegram holds the connection)
     RETRY_DELAY  = 10        # seconds to wait after a network error
 
+    # Commands that change system state. In a group chat every member shares the
+    # group's chat_id, so these additionally require the sender's Telegram user id
+    # to be in TELEGRAM_WHITELIST_IDS. Read-only commands stay open to the chat.
+    CONTROL_COMMANDS = frozenset({"/pause", "/resume", "/token", "/rescan"})
+    # Never accepted in a group: the message (a broker token) would be visible to all members.
+    PRIVATE_ONLY_COMMANDS = frozenset({"/token"})
+
     def __init__(self) -> None:
         from dotenv import load_dotenv
         load_dotenv()
 
         self._token    = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self._chat_id  = os.getenv("TELEGRAM_CHAT_ID",  "").strip()
+        # Telegram user ids allowed to run CONTROL_COMMANDS (comma-separated).
+        self._admin_ids = {
+            s.strip() for s in os.getenv("TELEGRAM_WHITELIST_IDS", "").split(",") if s.strip()
+        }
         self._running  = False
         self._thread:  Optional[threading.Thread] = None
         self._paused   = False
@@ -119,10 +136,10 @@ class TelegramCommandBot:
                          name="TelegramTokenReminder").start()
         threading.Thread(target=self._sandy_loop, daemon=True,
                          name="SandyMonitor").start()
-        log.info("[TelegramBot] Started polling. Bot: @Amitkhatkarbot")
+        log.info("[TelegramBot] Started polling. Bot: @TradeSenseAI_bot")
         if not self._chat_id:
             log.info("[TelegramBot] No TELEGRAM_CHAT_ID set yet. "
-                     "Send /start to @Amitkhatkarbot to register your Chat ID.")
+                     "Send /start to @TradeSenseAI_bot to register your Chat ID.")
 
     def stop(self) -> None:
         self._running = False
@@ -306,7 +323,9 @@ class TelegramCommandBot:
         text = msg.get("text", "").strip()
         chat = msg.get("chat", {})
         incoming_id = str(chat.get("id", ""))
-        first_name  = chat.get("first_name", "Trader")
+        chat_type   = chat.get("type", "private")
+        user_id     = str(msg.get("from", {}).get("id", ""))
+        first_name  = chat.get("first_name") or msg.get("from", {}).get("first_name", "Trader")
 
         if not text or not incoming_id:
             return
@@ -318,7 +337,9 @@ class TelegramCommandBot:
             return
 
         # ── Security: reject if registered chat_id doesn't match ───────────
-        if self._chat_id and incoming_id != self._chat_id:
+        # Admins may also talk to the bot 1-to-1 when it is bound to a group.
+        admin_dm = chat_type == "private" and user_id in self._admin_ids
+        if self._chat_id and incoming_id != self._chat_id and not admin_dm:
             self._send(incoming_id,
                        "🔒 <b>Unauthorized.</b>\n"
                        "This bot is private and bound to its owner's account.")
@@ -343,6 +364,21 @@ class TelegramCommandBot:
 
         # ── Route command ───────────────────────────────────────────────────
         cmd = text.split()[0].lower().split("@")[0]   # strip @botname suffix
+
+        # ── Control commands: private-only / admin-only checks ─────────────
+        if cmd in self.PRIVATE_ONLY_COMMANDS and chat_type != "private":
+            self._send(incoming_id,
+                       f"🔒 Send <code>{_esc(cmd)}</code> to me in a private chat — "
+                       "never post tokens in a group.")
+            log.warning("[TelegramBot] Refused %s in non-private chat %s", cmd, incoming_id)
+            return
+        if cmd in self.CONTROL_COMMANDS and not self._is_admin(incoming_id, chat_type, user_id):
+            self._send(incoming_id,
+                       f"🔒 <code>{_esc(cmd)}</code> is restricted to administrators.")
+            log.warning("[TelegramBot] Refused %s from non-admin user=%s chat=%s",
+                        cmd, user_id, incoming_id)
+            return
+
         handler = self._handlers.get(cmd)
         if handler:
             try:
@@ -355,6 +391,12 @@ class TelegramCommandBot:
                      "Send /help to see all commands.")
 
         self._send(incoming_id, reply)
+
+    def _is_admin(self, incoming_id: str, chat_type: str, user_id: str) -> bool:
+        """Listed admin, or the owner of a bot bound to a private chat (legacy setup)."""
+        if user_id and user_id in self._admin_ids:
+            return True
+        return chat_type == "private" and bool(self._chat_id) and incoming_id == self._chat_id
 
     # ── Send ───────────────────────────────────────────────────────────────
 
@@ -1359,11 +1401,11 @@ def run_bot() -> None:
     bot.start()
     print()
     print("=" * 60)
-    print("  TELEGRAM BOT — @Amitkhatkarbot")
+    print("  TELEGRAM BOT — @TradeSenseAI_bot")
     print("=" * 60)
     print("  Status : polling for messages...")
     print("  To register your Chat ID, open Telegram")
-    print("  and send /start  to  @Amitkhatkarbot")
+    print("  and send /start  to  @TradeSenseAI_bot")
     print("  Then paste the Chat ID into .env:")
     print("    TELEGRAM_CHAT_ID = <your_id>")
     print("=" * 60)
