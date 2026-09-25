@@ -1,7 +1,7 @@
 """
 Read-only data access for the web dashboard.
 
-Reads exactly the same sources as control_tower/dashboard_app.py:
+Reads the telemetry and journal files the trading engine writes:
   - data/control_tower.db       (TelemetryLogger: ct_cycles, ct_decisions, ct_events)
   - data/paper_trades.csv       (OrderManager trade journal)
   - data/paper_trading_daily.json, data/logs/eod_report_*.txt  (EOD outputs)
@@ -193,7 +193,7 @@ _WEEKDAY_ONLY = {"premarket_refiner"}
 
 
 def _read_schedule() -> Dict[str, str]:
-    """Parse SCHEDULE from config.py by regex, same as the Streamlit dashboard."""
+    """Parse SCHEDULE from config.py by regex (no import of the trading config needed)."""
     schedule: Dict[str, str] = {}
     try:
         with open(os.path.join(_ROOT, "config.py"), encoding="utf-8") as fh:

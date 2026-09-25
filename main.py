@@ -7,7 +7,7 @@ Usage:
   python main.py --backtest      # Re-run all strategy backtests
   python main.py --evolve        # Trigger strategy evolution pass
   python main.py --report        # Print learning engine report
-  python main.py --dashboard     # Launch Control Tower Streamlit dashboard
+  python main.py --dashboard     # Launch the web dashboard (web_dashboard/, port 8501)
   python main.py --discover      # Run Edge Discovery Engine manually
   python main.py --readiness     # Run system readiness checklist
   python main.py --paper         # Run in paper trading mode (no live orders)
@@ -83,7 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report",    action="store_true",
                         help="Print learning report and exit")
     parser.add_argument("--dashboard", action="store_true",
-                        help="Launch Control Tower Streamlit dashboard")
+                        help="Launch the web dashboard (web_dashboard/, port 8501)")
     parser.add_argument("--discover",  action="store_true",
                         help="Run Edge Discovery Engine manually and print report")
     parser.add_argument("--readiness", action="store_true",
@@ -169,14 +169,10 @@ def main():
 
     # ── Mode: Control Tower dashboard (no brain needed) ──────────────────
     if args.dashboard:
-        log.info("Launching Control Tower dashboard…")
-        dashboard_script = os.path.join(
-            os.path.dirname(__file__), "control_tower", "dashboard_app.py")
-        os.execv(
-            sys.executable,
-            [sys.executable, "-m", "streamlit", "run", dashboard_script],
-        )
-        return   # unreachable but keeps linters happy
+        log.info("Launching Control Tower web dashboard…")
+        from web_dashboard.server import main as run_dashboard_server
+        run_dashboard_server()
+        return
 
     # ── Single-instance lock — prevent duplicate processes ────────────────
     from utils import instance_lock

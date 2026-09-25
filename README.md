@@ -61,7 +61,7 @@ Layer 13  LearningSystem         LearningEngine, StrategyPerformanceTracker
 Layer 14  PerformanceAnalytics   DrawdownAnalyzer, WalkForwardTester
 Layer 15  ResearchLab            Promotion gates: WinRate≥50%, Sharpe>0.8, MaxDD<15%
 Layer 16  ValidationEngine       6-stage validation pipeline
-Layer 17  ControlTower           SQLite telemetry, Streamlit dashboard, EventBus
+Layer 17  ControlTower           SQLite telemetry, web dashboard, EventBus
 ```
 
 **Full cycle baseline:** 172ms | **SLA:** 200ms | **Mode:** Paper trading
@@ -93,7 +93,7 @@ iios/                          Python package root
 ├── research/                  Layer 15 research lab
 ├── simulation/                Layer 8 Monte Carlo
 ├── monitoring/                Layer 17 ControlTower
-├── dashboard/                 Streamlit dashboard
+├── dashboard/                 Dashboard (see web_dashboard/ at repo root)
 ├── cli/                       Telegram bot + 13 commands
 ├── agents/                    All ~62 AI agents
 ├── models/                    ML models, strategies
@@ -165,6 +165,11 @@ python dev.py
 
 # Health check
 python healthcheck.py
+
+# Web dashboard (http://localhost:8501, password login)
+python -m web_dashboard.set_password     # once: stores a salted hash in .env
+python -m web_dashboard.server           # or: python main.py --dashboard
+# Frontend dev: cd web_dashboard/frontend && pnpm install && pnpm dev  (build: pnpm build)
 ```
 
 ---
