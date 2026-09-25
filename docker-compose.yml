@@ -60,9 +60,10 @@ services:
     networks:
       - trading-network
 
-  # Monitoring/Dashboard container — read-only web dashboard (FastAPI + React).
-  # Service name kept as streamlit-dashboard so existing deploy scripts keep working.
-  # Legacy Streamlit UI: `streamlit run control_tower/dashboard_app.py` (still in the image).
+  # Monitoring/Dashboard container — read-only web dashboard (FastAPI + React, password login).
+  # The service keeps its historical name "streamlit-dashboard" (Streamlit itself is gone):
+  # scripts/setup-vps.sh writes a docker-compose.override.yml keyed on this name, and the
+  # container_name below would clash during a rename. Treat it as a label.
   streamlit-dashboard:
     build: .
     container_name: trading-dashboard
@@ -82,7 +83,7 @@ services:
     cpus: '0.5'
 
     ports:
-      - "8501:8501"  # Streamlit dashboard
+      - "8501:8501"  # Web dashboard
     
     networks:
       - trading-network

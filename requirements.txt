@@ -38,8 +38,6 @@ websocket-client>=1.6.0
 python-telegram-bot>=20.7
 
 # ── Dashboard (Layer 17 ControlTower) ─────────────────────────────────────────
-streamlit>=1.32.0
-plotly>=5.20.0                # Interactive charts for dashboard
 fastapi>=0.115.0              # Web dashboard API (web_dashboard/server.py)
 uvicorn>=0.30.0               # ASGI server for the web dashboard
 

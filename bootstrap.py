@@ -67,7 +67,7 @@ def check_required_packages() -> Check:
         "yfinance": "yfinance",
         "requests": "requests",
         "schedule": "schedule",
-        "streamlit": "streamlit",
+        "fastapi": "fastapi",
         "loguru": "loguru",
     }
     missing = [pip for mod, pip in probes.items() if _try_import(mod)]

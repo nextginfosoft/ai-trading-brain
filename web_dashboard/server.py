@@ -24,8 +24,14 @@ from pydantic import BaseModel
 from web_dashboard import auth, data
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(_ROOT, ".env.local"))  # local overrides win (load_dotenv never overwrites)
-load_dotenv(os.path.join(_ROOT, ".env"))
+
+
+def load_env() -> None:
+    """Load .env.local then .env (load_dotenv never overwrites, so .env.local wins).
+    Called at server start, not import, so importing the app has no side effects."""
+    load_dotenv(os.path.join(_ROOT, ".env.local"))
+    load_dotenv(os.path.join(_ROOT, ".env"))
+
 
 DIST_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
@@ -176,6 +182,7 @@ if os.path.isdir(DIST_DIR):
 def main() -> None:
     import uvicorn
 
+    load_env()
     port = int(os.getenv("DASHBOARD_PORT", "8501"))
     uvicorn.run(app, host=os.getenv("DASHBOARD_HOST", "0.0.0.0"), port=port, log_level="warning")
 

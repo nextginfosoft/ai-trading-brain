@@ -66,7 +66,7 @@ class ControlTower:
         self.health       = CycleHealthMonitor(bus)
         self.mi_latency   = MILatencyAudit(bus)
         log.info("[ControlTower] ✓ All sub-systems active. "
-                 "Dashboard: streamlit run control_tower/dashboard_app.py")
+                 "Dashboard: python -m web_dashboard.server")
 
     # ── Singleton accessor ─────────────────────────────────────────────────
 
