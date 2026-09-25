@@ -1,3 +1,13 @@
+# ── Stage 1: build the web dashboard frontend (React → static files) ─────────
+FROM node:22-slim AS dashboard-build
+WORKDIR /build
+RUN corepack enable
+COPY web_dashboard/frontend/package.json web_dashboard/frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY web_dashboard/frontend/ ./
+RUN pnpm build
+
+# ── Stage 2: Python runtime ───────────────────────────────────────────────────
 FROM python:3.14-slim
 
 # Set working directory
@@ -17,6 +27,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy entire project
 COPY . .
+
+# Built dashboard frontend, served by web_dashboard/server.py
+COPY --from=dashboard-build /build/dist /app/web_dashboard/frontend/dist
 
 # Generate build manifest from files actually baked into this image.
 # This guarantees the container verifier always compares against the
