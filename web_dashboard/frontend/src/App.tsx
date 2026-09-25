@@ -1,11 +1,13 @@
+import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Activity, BrainCircuit, CandlestickChart, Filter, LayoutDashboard } from 'lucide-react'
+import { Activity, BrainCircuit, CandlestickChart, Filter, LayoutDashboard, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { Badge, type Tone } from './components/ui'
-import { useOverview } from './lib/api'
+import { Badge, QueryState, type Tone } from './components/ui'
+import { logout, onUnauthorized, useOverview, useSession, type Session } from './lib/api'
 import { duration, marketSession, num, titleCase } from './lib/format'
 import HealthPage from './pages/Health'
+import LoginPage from './pages/Login'
 import OverviewPage from './pages/Overview'
 import SignalsPage from './pages/Signals'
 import TradesPage from './pages/Trades'
@@ -78,6 +80,37 @@ function StatusBar() {
 }
 
 export default function App() {
+  const queryClient = useQueryClient()
+  const session = useSession()
+
+  useEffect(() => {
+    onUnauthorized(() => {
+      queryClient.setQueryData<Session>(['session'], (s) => ({ configured: s?.configured ?? true, authenticated: false }))
+    })
+  }, [queryClient])
+
+  if (!session.data) return <QueryState isLoading={session.isLoading} error={session.error} />
+  if (!session.data.authenticated)
+    return (
+      <LoginPage
+        configured={session.data.configured}
+        onSuccess={() => {
+          queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+          queryClient.setQueryData<Session>(['session'], { configured: true, authenticated: true })
+        }}
+      />
+    )
+
+  const signOut = async () => {
+    await logout()
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+    queryClient.setQueryData<Session>(['session'], { configured: true, authenticated: false })
+  }
+
+  return <Shell onSignOut={signOut} />
+}
+
+function Shell({ onSignOut }: { onSignOut: () => void }) {
   return (
     <div className="flex h-full min-h-0">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-line bg-panel md:flex">
@@ -108,8 +141,15 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto px-4 py-4 text-[11px] leading-relaxed text-ink-3">
-          Read-only view. Refreshes every 5s.
+        <div className="mt-auto space-y-3 px-4 py-4">
+          <button
+            onClick={onSignOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-3 hover:bg-panel-2 hover:text-ink-2"
+          >
+            <LogOut className="size-4" aria-hidden />
+            Sign out
+          </button>
+          <p className="text-[11px] leading-relaxed text-ink-3">Read-only view. Refreshes every 5s.</p>
         </div>
       </aside>
 
@@ -131,6 +171,9 @@ export default function App() {
                 {label}
               </NavLink>
             ))}
+            <button onClick={onSignOut} className="ml-auto rounded-md px-2.5 py-1 text-xs whitespace-nowrap text-ink-3">
+              Sign out
+            </button>
           </nav>
           <StatusBar />
         </header>
