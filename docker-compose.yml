@@ -73,6 +73,9 @@ services:
 
     volumes:
       - ./data:/app/data:ro
+      # Only writable path: the Zerodha daily login stores its session token here
+      # (git-ignored); the engine reads it from ./data/broker via its own mount.
+      - ./data/broker:/app/data/broker:rw
       - .env:/app/.env:ro          # GAP-026: dashboard reads config env vars
 
     environment:

@@ -187,6 +187,14 @@ class TelegramCommandBot:
                 weekday = now_ist.weekday()          # 0=Mon … 4=Fri
                 h, m    = now_ist.hour, now_ist.minute
 
+                # Zerodha (Kite) installations: daily dashboard login instead of a pasted Dhan token.
+                from broker_auth import kite_session
+                if kite_session.is_configured():
+                    _startup_done, _reminded_730, _reminded_915 = self._kite_reminders(
+                        kite_session.load_session() is not None, _startup_done, _reminded_730,
+                        _reminded_915, today, weekday, h, m)
+                    continue
+
                 # Check live status
                 dhan_live = False
                 try:
@@ -257,6 +265,41 @@ class TelegramCommandBot:
             except Exception as exc:
                 if self._running:
                     log.warning("[TelegramBot] Reminder loop error: %s", exc, exc_info=True)
+
+    def _kite_reminders(self, connected: bool, startup_done: bool, reminded_am: str,
+                        reminded_open: str, today: str, weekday: int, h: int, m: int):
+        """Startup status + 08:30 / 09:15 weekday reminders to do the daily Zerodha login."""
+        url = os.getenv("DASHBOARD_PUBLIC_URL", "").strip()
+        where = f'<a href="{_esc(url)}">{_esc(url)}</a>' if url else "the TradeSense dashboard"
+
+        if not startup_done:
+            if connected:
+                self.push("✅ <b>TradeSense AI is online!</b>\nZerodha is <b>connected</b> — live Kite data active. 📈")
+            else:
+                self.push("🔑 <b>TradeSense AI is online!</b>\n"
+                          "━━━━━━━━━━━━━━━━━━━━━\n"
+                          "Zerodha is <b>not connected</b> — using fallback market data.\n\n"
+                          f"Open {where} and click <b>Connect Zerodha</b>.")
+            log.info("[TelegramBot] Startup Zerodha status sent (connected=%s).", connected)
+            return True, reminded_am, reminded_open
+
+        if weekday >= 5 or connected:
+            return startup_done, reminded_am, reminded_open
+
+        if h == 8 and 30 <= m < 45 and today != reminded_am:
+            self.push("🔑 <b>Good morning! Zerodha login needed.</b>\n"
+                      "━━━━━━━━━━━━━━━━━━━━━\n"
+                      "Kite sessions expire every morning (Zerodha rule).\n\n"
+                      f"Open {where} → <b>Connect Zerodha</b> → log in.\n"
+                      "Market opens at <b>09:15 IST</b>. 🕘")
+            log.info("[TelegramBot] 08:30 Zerodha login reminder sent.")
+            return startup_done, today, reminded_open
+        if h == 9 and 15 <= m < 25 and today != reminded_open:
+            self.push("⚠️ <b>Market is OPEN — Zerodha still not connected.</b>\n"
+                      f"Using fallback data. Connect now: {where}")
+            log.warning("[TelegramBot] 09:15 Zerodha login nudge sent — still not connected.")
+            return startup_done, reminded_am, today
+        return startup_done, reminded_am, reminded_open
 
     # ── Sandy hourly liveness loop (Phase 7b) ──────────────────────────────
 

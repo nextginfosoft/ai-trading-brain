@@ -203,6 +203,32 @@ export async function logout(): Promise<void> {
   await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
 }
 
+// ── Zerodha (Kite) daily login ─────────────────────────────────────────────
+
+export type KiteStatus = {
+  configured: boolean
+  connected: boolean
+  user_id: string
+  user_name: string
+  login_at: string | null
+  expires_at: string | null
+}
+
+export const useKiteStatus = () =>
+  useQuery({ queryKey: ['kite'], queryFn: () => getJson<KiteStatus>('/api/kite/status'), refetchInterval: 30_000 })
+
+/** Returns the Zerodha login URL (with a one-time state) to navigate to. */
+export async function kiteLoginUrl(): Promise<string> {
+  const res = await fetch('/api/kite/login', { method: 'POST', credentials: 'same-origin' })
+  const body = (await res.json().catch(() => ({}))) as { url?: string; detail?: string }
+  if (!res.ok || !body.url) throw new Error(body.detail || `Could not start Zerodha login (HTTP ${res.status})`)
+  return body.url
+}
+
+export async function kiteDisconnect(): Promise<void> {
+  await fetch('/api/kite/disconnect', { method: 'POST', credentials: 'same-origin' })
+}
+
 function usePolled<T>(key: string, path: string, refetchInterval = REFRESH_MS) {
   return useQuery({
     queryKey: [key, path],
