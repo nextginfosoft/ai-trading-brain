@@ -7,9 +7,11 @@ that the rest of the system (GlobalDataAI, MarketIntelligence, etc.) calls.
 
 Architecture:
     DataFeedManager
-      ├── YahooFeed            — global indices, currencies, commodities
+      ├── KiteFeed             — Zerodha: PRIMARY Indian quotes/candles when logged in today
+      ├── DhanFeed             — Indian quotes/candles/options (if a Dhan token is set)
+      ├── AngelOneFeed         — optional Indian fallback
       ├── NSEFeed              — Indian market data + options chain
-      └── broker feed (future) — Zerodha WebSocket for real-time intraday
+      └── YahooFeed            — global indices, currencies, commodities; last-resort Indian
 
 Wire-in:
   Replace _fetch_live_data() stub in global_data_ai.py with
@@ -28,7 +30,8 @@ from typing import Dict, List, Optional, Tuple
 from .yahoo_feed    import YahooFeed
 from .nse_feed      import NSEFeed
 from .dhan_feed     import DhanFeed
-from .base_feed     import TickerQuote, PriceBar, OptionsChain
+from .kite_feed     import KiteFeed
+from .base_feed     import TickerQuote, PriceBar, OptionsChain, LIVE_BROKER_SOURCES
 try:
     from .angelone_feed import AngelOneFeed as _AngelOneFeedCls
     _HAS_ANGELONE = True
@@ -90,9 +93,11 @@ _OPT_CACHE_STALE_SEC = 3600   # 60 min  — cache too old → DEGRADED_CACHE
 
 class _FeedCycleStats:
     """Lightweight per-cycle counter — reset by orchestrator at cycle start."""
-    __slots__ = ("dhan_hits", "yahoo_hits", "angelone_hits", "cache_hits", "sim_hits", "nodata_hits", "total")
+    __slots__ = ("kite_hits", "dhan_hits", "yahoo_hits", "angelone_hits", "cache_hits", "sim_hits",
+                 "nodata_hits", "total")
 
     def __init__(self) -> None:
+        self.kite_hits     = 0
         self.dhan_hits     = 0
         self.yahoo_hits    = 0
         self.angelone_hits = 0
@@ -106,7 +111,9 @@ class _FeedCycleStats:
             return
         self.total += 1
         src = (quote.feed_source or "").upper()
-        if src.startswith("DHAN"):
+        if src == "KITE":
+            self.kite_hits += 1
+        elif src.startswith("DHAN"):
             self.dhan_hits += 1
         elif src == "YAHOO":
             self.yahoo_hits += 1
@@ -143,20 +150,22 @@ class _FeedCycleStats:
     def sim_pct(self) -> float:
         return (self.sim_hits / self.total) if self.total else 0.0
 
+    def live_hits(self) -> int:
+        return self.kite_hits + self.dhan_hits + self.yahoo_hits + self.angelone_hits
+
     def live_pct(self) -> float:
-        live = self.dhan_hits + self.yahoo_hits + self.angelone_hits
-        return (live / self.total) if self.total else 0.0
+        return (self.live_hits() / self.total) if self.total else 0.0
 
     def summary(self) -> str:
         if not self.total and not self.nodata_hits:
             return "[FeedSummary] feed_summary: no quotes fetched this cycle"
         lvl  = self.truth_level()
-        live = self.dhan_hits + self.yahoo_hits + self.angelone_hits
+        live = self.live_hits()
         total_req = self.total + self.nodata_hits
         pct = lambda n: f"{round(n / total_req * 100)}%" if total_req else "0%"
         return (
             f"[FeedSummary] requested={total_req}  "
-            f"live={live}({pct(live)})  dhan={self.dhan_hits}  yahoo={self.yahoo_hits}  "
+            f"live={live}({pct(live)})  kite={self.kite_hits}  dhan={self.dhan_hits}  yahoo={self.yahoo_hits}  "
             f"angelone={self.angelone_hits}  "
             f"cache={self.cache_hits}  sim={self.sim_hits}  nodata={self.nodata_hits}  "
             f"truth={lvl}"
@@ -179,18 +188,20 @@ def get_feed_manager() -> "DataFeedManager":
 class FeedStatus:
     """Health snapshot of all data feeds."""
     def __init__(self, yahoo_live: bool, nse_live: bool, nse_mode: str,
-                 dhan_live: bool = False) -> None:
+                 dhan_live: bool = False, kite_live: bool = False) -> None:
         self.yahoo_live  = yahoo_live
         self.nse_live    = nse_live
         self.nse_mode    = nse_mode
         self.dhan_live   = dhan_live
+        self.kite_live   = kite_live
         self.timestamp   = datetime.now()
 
     def summary(self) -> str:
         y = "✅ LIVE" if self.yahoo_live else "🔄 SIM"
         n = f"✅ {self.nse_mode.upper()}" if self.nse_live else "🔄 SIM"
         d = "✅ LIVE" if self.dhan_live else "not configured"
-        return f"Yahoo={y}  NSE={n}  Dhan={d}"
+        k = "✅ LIVE" if self.kite_live else "not connected"
+        return f"Kite={k}  Yahoo={y}  NSE={n}  Dhan={d}"
 
 
 class _DisabledAngelOne:
@@ -236,7 +247,8 @@ class DataFeedManager:
     def __init__(self) -> None:
         self.yahoo    = YahooFeed()
         self.nse      = NSEFeed()
-        self.dhan     = DhanFeed()      # PRIMARY Indian data source + order execution
+        self.kite     = KiteFeed()      # PRIMARY Indian data when a Zerodha login is active today
+        self.dhan     = DhanFeed()      # Indian data (if token set) + order execution
         self.angelone = _AngelOneFeedCls() if _HAS_ANGELONE else _DisabledAngelOne()  # FALLBACK Indian data source (optional)
         self._stats = _FeedCycleStats()
         self._last_yahoo_refresh: Optional[datetime] = None   # Phase 2: track last successful Yahoo refresh
@@ -250,6 +262,10 @@ class DataFeedManager:
 
     def _startup_feed_validation(self) -> None:
         """Log a structured feed validation block at startup."""
+        from broker_auth import kite_session
+        if kite_session.is_configured():
+            log.info("[FeedValidation] Kite feed (PRIMARY when connected): connected=%s — "
+                     "log in daily via the dashboard's Connect Zerodha button.", self.kite.is_live)
         # Dhan is primary — always log its status first
         state = self.dhan.auth_state()
         if not state["token_present"]:
@@ -292,6 +308,7 @@ class DataFeedManager:
             nse_live   = self.nse.is_live,
             nse_mode   = self.nse.name,
             dhan_live  = self.dhan.is_live,
+            kite_live  = self.kite.is_live,
         )
 
     # ── Cycle feed-health tracking ─────────────────────────────────────────
@@ -311,10 +328,10 @@ class DataFeedManager:
 
     def get_cycle_stats_summary(self) -> dict:
         """Phase 9: Raw cycle stats dict for Telegram /cycle and orchestrator report."""
-        live = self._stats.dhan_hits + self._stats.yahoo_hits + self._stats.angelone_hits
         return {
             "total":    self._stats.total,
-            "live":     live,
+            "live":     self._stats.live_hits(),
+            "kite":     self._stats.kite_hits,
             "dhan":     self._stats.dhan_hits,
             "yahoo":    self._stats.yahoo_hits,
             "angelone": self._stats.angelone_hits,
@@ -690,10 +707,16 @@ class DataFeedManager:
     })
 
     def get_quote(self, symbol: str) -> Optional[TickerQuote]:
-        """Get a market quote. Indian symbols: AngelOne → Dhan → Yahoo. Global: Yahoo."""
+        """Get a market quote. Indian symbols: Kite → Dhan → AngelOne → Yahoo. Global: Yahoo."""
         bare = symbol.upper().replace(".NS", "").replace(".BO", "")
         if bare not in self._GLOBAL_SYMBOLS:
-            # Dhan: primary Indian data source
+            # Kite: primary Indian data source while a Zerodha login is active
+            if self.kite.is_live:
+                q = self.kite.get_quote(symbol)
+                if q and q.ltp > 0:
+                    self._stats.record(q)
+                    return q
+            # Dhan: Indian data source when a Dhan token is set
             from .dhan_feed import DHAN_SECURITY_MAP
             if self.dhan.is_live and symbol.upper() in DHAN_SECURITY_MAP:
                 q = self.dhan.get_quote(symbol)
@@ -711,8 +734,13 @@ class DataFeedManager:
         return q
 
     def get_indian_quote(self, symbol: str) -> Optional[TickerQuote]:
-        """Get an Indian market quote — Dhan primary, AngelOne fallback, then NSEFeed."""
+        """Get an Indian market quote — Kite, then Dhan, AngelOne, NSEFeed."""
         bare = symbol.upper().replace(".NS", "").replace(".BO", "")
+        if self.kite.is_live:
+            q = self.kite.get_quote(symbol)
+            if q and q.ltp > 0:
+                self._stats.record(q)
+                return q
         if self.dhan.is_live:
             q = self.dhan.get_quote(symbol)
             if q and q.ltp > 0:
@@ -728,10 +756,11 @@ class DataFeedManager:
         return q
 
     def get_multiple_quotes(self, symbols: List[str]) -> Dict[str, TickerQuote]:
-        """Batch fetch quotes. Indian symbols: Dhan → AngelOne → Yahoo. Global: Yahoo.
+        """Batch fetch quotes. Indian symbols: Kite → Dhan → AngelOne → Yahoo. Global: Yahoo.
 
-        Dhan is the primary Indian feed (also used for order execution).
-        AngelOne is fallback for symbols Dhan misses. Yahoo handles global symbols.
+        Kite is the primary Indian feed while a Zerodha login is active today;
+        Dhan (if configured) and AngelOne fill what it misses. Yahoo handles
+        global symbols and anything still missing.
 
         Phase 1 (FeedTrace): emits [FeedTrace] DEBUG logs at each stage.
         Phase 2 (Timing):    tracks self._last_yahoo_refresh on any Yahoo hit.
@@ -749,18 +778,24 @@ class DataFeedManager:
         global_ = [s for s in symbols if _bare(s) in self._GLOBAL_SYMBOLS]
         indian  = [s for s in symbols if _bare(s) not in self._GLOBAL_SYMBOLS]
 
-        # ── Dhan: primary for all Indian symbols ─────────────────────────────
-        if self.dhan.is_live and indian:
+        # ── Kite: primary for Indian symbols while logged in ─────────────────
+        if self.kite.is_live and indian:
+            kite_result = self.kite.get_multiple_quotes(indian)
+            result.update(kite_result)
+            log.debug("[FeedTrace] stage=KITE_PRIMARY requested=%d returned=%d",
+                      len(indian), len(kite_result))
+        remaining = [s for s in indian if s not in result]
+
+        # ── Dhan: for Indian symbols Kite did not return ──────────────────────
+        if self.dhan.is_live and remaining:
             from .dhan_feed import DHAN_SECURITY_MAP
-            dhan_candidates = [s for s in indian if _bare(s) in DHAN_SECURITY_MAP]
+            dhan_candidates = [s for s in remaining if _bare(s) in DHAN_SECURITY_MAP]
             if dhan_candidates:
                 dhan_result = self.dhan.get_multiple_quotes(dhan_candidates)
                 result.update(dhan_result)
-                log.debug("[FeedTrace] stage=DHAN_PRIMARY requested=%d returned=%d",
+                log.debug("[FeedTrace] stage=DHAN requested=%d returned=%d",
                           len(dhan_candidates), len(dhan_result))
-            ao_missed = [s for s in indian if s not in result]
-        else:
-            ao_missed = indian
+        ao_missed = [s for s in remaining if s not in result]
 
         # ── AngelOne: fallback for what Dhan missed ───────────────────────────
         if ao_missed and self.angelone.is_live:
@@ -790,7 +825,8 @@ class DataFeedManager:
 
         # Phase 1 FeedTrace aggregate — logged at DEBUG to avoid cycle spam
         _live   = sum(1 for q in result.values()
-                      if (getattr(q, "feed_source", "") or "").upper() in ("DHAN", "YAHOO", "ANGELONE"))
+                      if (getattr(q, "feed_source", "") or "").upper()
+                      in LIVE_BROKER_SOURCES | {"YAHOO", "ANGELONE"})
         _sim    = sum(1 for q in result.values()
                       if (getattr(q, "feed_source", "") or "").upper() == "SIM")
         _ms     = int((_t.monotonic() - _t0) * 1000)
@@ -812,9 +848,14 @@ class DataFeedManager:
     ) -> List[PriceBar]:
         """
         Get historical OHLCV bars.
-        Priority: AngelOneFeed → DhanFeed → NSEFeed (indian) → YahooFeed.
+        Priority: KiteFeed → DhanFeed → AngelOneFeed → NSEFeed (indian) → YahooFeed.
         """
         bare = symbol.upper().replace(".NS", "").replace(".BO", "")
+        # Kite: primary for Indian symbols while logged in (returns [] when it can't serve)
+        if self.kite.is_live and bare not in self._GLOBAL_SYMBOLS:
+            kite_bars = self.kite.get_history(symbol, days, interval)
+            if kite_bars:
+                return kite_bars
         # Dhan: primary for NSE equities and indices (skip for long-period requests
         # — Dhan supports ~1 year max; fall through to Yahoo for historical replay)
         _MAX_DHAN_DAYS = 365

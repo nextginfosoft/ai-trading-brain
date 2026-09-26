@@ -42,13 +42,16 @@ from collections import defaultdict
 from datetime import date
 from typing import Dict, Optional
 
+from data_feeds.base_feed import LIVE_BROKER_SOURCES
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
 # ── Trust multipliers per feed source ────────────────────────────────────────
 FEED_TRUST_MULTIPLIER: Dict[str, float] = {
+    "KITE":    1.00,
     "DHAN":    1.00,
+    "DHAN_WS": 1.00,
     "YAHOO":   0.85,
     "CACHE":   0.80,
     "SIM":     0.60,
@@ -140,7 +143,7 @@ class FallbackContaminationAudit:
             contaminated_count = sum(
                 v for k, v in by_src.items() if k in CONTAMINATED_SOURCES
             )
-            live_count = by_src.get("DHAN", 0)
+            live_count = sum(by_src.get(s, 0) for s in LIVE_BROKER_SOURCES)
             contamination_rate = (contaminated_count / total * 100.0) if total > 0 else 0.0
 
         log.info(
@@ -173,7 +176,7 @@ class FallbackContaminationAudit:
             " live=%d contaminated=%d contamination_rate=%.1f%%"
             " by_source=%s top_contaminated_symbols=%r",
             total,
-            by_src.get("DHAN", 0),
+            sum(by_src.get(s, 0) for s in LIVE_BROKER_SOURCES),
             contaminated,
             (contaminated / total * 100.0) if total > 0 else 0.0,
             dict(by_src),

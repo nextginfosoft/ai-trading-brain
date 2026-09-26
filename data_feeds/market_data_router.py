@@ -16,7 +16,7 @@ For global / analytics symbols (SP500, VIX, USDINR …):
   Yahoo is primary; Dhan not consulted.
 
 Source attribution is written back onto every TickerQuote:
-  quote.feed_source      — "DHAN" | "YAHOO" | "CACHE"
+  quote.feed_source      — "KITE" | "DHAN" | "YAHOO" | "CACHE"
   quote.fallback_active  — True when Dhan failed and another source used
   quote.feed_degraded    — True when no live data; cached LTP served
 
@@ -100,6 +100,7 @@ class MarketDataRouter:
         # Shares the already-initialised feed instances from DataFeedManager
         from .data_feed_manager import get_feed_manager
         _fm = get_feed_manager()
+        self._kite  = getattr(_fm, "kite", None)
         self._dhan  = _fm.dhan
         self._yahoo = _fm.yahoo
 
@@ -107,6 +108,8 @@ class MarketDataRouter:
         self._ltp_cache: Dict[str, Tuple[float, float, str]] = {}
 
         # ── Lifetime observability counters ───────────────────────────────
+        self._kite_success:     int = 0
+        self._kite_fail:        int = 0
         self._dhan_success:     int = 0
         self._dhan_fail:        int = 0
         self._yahoo_success:    int = 0
@@ -156,7 +159,7 @@ class MarketDataRouter:
         internally to bare.  Returns dict keyed by BARE symbol.
 
         Each returned TickerQuote has provenance metadata set:
-          quote.feed_source     — "DHAN" | "YAHOO" | "CACHE"
+          quote.feed_source     — "KITE" | "DHAN" | "YAHOO" | "CACHE"
           quote.fallback_active — True when Dhan missed and Yahoo/cache used
           quote.feed_degraded   — True when no live data; cached LTP served
 
@@ -172,9 +175,33 @@ class MarketDataRouter:
         bare_symbols = [self._bare(s) for s in symbols]
         self._total_calls += len(bare_symbols)
 
-        # Partition: Indian symbols (may use Dhan) vs global-only (Yahoo only)
-        dhan_targets  = [s for s in bare_symbols if s not in _YAHOO_ONLY]
-        yahoo_targets = [s for s in bare_symbols if s in _YAHOO_ONLY]
+        # Partition: Indian symbols (may use a broker feed) vs global-only (Yahoo only)
+        indian_targets = [s for s in bare_symbols if s not in _YAHOO_ONLY]
+        yahoo_targets  = [s for s in bare_symbols if s in _YAHOO_ONLY]
+
+        # ── 0. Kite batch for Indian symbols (while a Zerodha login is active) ─
+        kite_results: Dict[str, TickerQuote] = {}
+        if self._kite is not None and self._kite.is_live and indian_targets:
+            try:
+                raw = self._kite.get_multiple_quotes(indian_targets)
+                for sym, q in raw.items():
+                    bare = self._bare(sym)
+                    if q and getattr(q, "ltp", 0) > 0:
+                        q.feed_source     = "KITE"
+                        q.fallback_active = False
+                        q.feed_degraded   = False
+                        q.symbol          = bare
+                        self._ltp_cache[bare] = (float(q.ltp), time.monotonic(), "KITE")
+                        kite_results[bare] = q
+                        self._kite_success += 1
+                        self._last_source_dist["KITE"] = self._last_source_dist.get("KITE", 0) + 1
+                        self._last_symbol_sources[bare] = "KITE"
+            except Exception as exc:
+                log.warning("[MarketDataRouter] Kite batch error: %s", exc)
+            self._kite_fail += len([s for s in indian_targets if s not in kite_results])
+
+        # Symbols Kite did not serve go to Dhan
+        dhan_targets = [s for s in indian_targets if s not in kite_results]
 
         # ── 1. Dhan batch for Indian symbols ─────────────────────────────
         dhan_results: Dict[str, TickerQuote] = {}
@@ -251,7 +278,7 @@ class MarketDataRouter:
                 self._yahoo_fail += len(yahoo_batch_bare)
 
         # ── 3. Cache fallback for symbols still missing ───────────────────
-        all_fetched = set(dhan_results) | set(yahoo_results)
+        all_fetched = set(kite_results) | set(dhan_results) | set(yahoo_results)
         cache_results: Dict[str, TickerQuote] = {}
 
         for bare in bare_symbols:
@@ -328,11 +355,12 @@ class MarketDataRouter:
                         sym, d_ltp, y_ltp, div_pct * 100,
                     )
 
-        # ── 5. Merge (Dhan wins, Yahoo fills gaps, cache last resort) ────
+        # ── 5. Merge (broker feeds win, Yahoo fills gaps, cache last resort) ─
         result: Dict[str, TickerQuote] = {}
         result.update(cache_results)    # lowest priority
         result.update(yahoo_results)    # mid priority
-        result.update(dhan_results)     # highest priority (authoritative)
+        result.update(dhan_results)     # broker
+        result.update(kite_results)     # broker (primary when logged in)
 
         return result
 
@@ -341,7 +369,7 @@ class MarketDataRouter:
     def get_ltp(self, symbol: str) -> Tuple[float, str]:
         """
         Single-symbol LTP.
-        Returns (ltp, source) where source is "DHAN" | "YAHOO" | "CACHE" | "DEGRADED".
+        Returns (ltp, source) where source is "KITE" | "DHAN" | "YAHOO" | "CACHE" | "DEGRADED".
         Returns (0.0, "DEGRADED") when no data available.
         """
         bare = self._bare(symbol)
@@ -365,7 +393,7 @@ class MarketDataRouter:
     def get_symbol_sources(self) -> Dict[str, str]:
         """
         Per-symbol data source from the most recent get_live_prices() call.
-        Returns dict of bare_symbol → "DHAN" | "YAHOO" | "CACHE" | "DEGRADED".
+        Returns dict of bare_symbol → "KITE" | "DHAN" | "YAHOO" | "CACHE" | "DEGRADED".
         Empty between calls or before the first call.
         """
         return dict(self._last_symbol_sources)
@@ -375,10 +403,16 @@ class MarketDataRouter:
         Lifetime observability stats.  CycleHealthMonitor uses this to
         report primary_feed_health, fallback_usage, and degraded symbols.
         """
-        total_live = self._dhan_success + self._yahoo_success
+        total_live = self._kite_success + self._dhan_success + self._yahoo_success
+        kite_pct   = round(self._kite_success / total_live * 100, 1) if total_live > 0 else 0.0
         dhan_pct   = round(self._dhan_success / total_live * 100, 1) if total_live > 0 else 0.0
         fallback_pct = round(self._yahoo_success / total_live * 100, 1) if total_live > 0 else 0.0
         return {
+            # Kite (primary when logged in)
+            "kite_success":        self._kite_success,
+            "kite_fail":           self._kite_fail,
+            "kite_success_pct":    kite_pct,
+            "kite_live":           bool(self._kite is not None and self._kite.is_live),
             # Dhan (primary)
             "dhan_success":        self._dhan_success,
             "dhan_fail":           self._dhan_fail,
@@ -405,6 +439,8 @@ class MarketDataRouter:
         """Human-readable one-liner for logs / Telegram / dashboard."""
         s = self.get_router_stats()
         parts = []
+        if s["kite_live"]:
+            parts.append(f"Kite={s['kite_success_pct']}%✅")
         if s["dhan_live"]:
             parts.append(f"Dhan={s['dhan_success_pct']}%✅")
         else:

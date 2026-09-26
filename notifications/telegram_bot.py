@@ -860,7 +860,8 @@ class TelegramCommandBot:
 
                 # Feed source badge
                 src = sym_sources.get(sym, "?")
-                src_badge = {"DHAN": "🟢", "YAHOO": "🟡", "CACHE": "🟠", "DEGRADED": "🔴"}.get(src, "❓")
+                src_badge = {"KITE": "🟢", "DHAN": "🟢", "YAHOO": "🟡", "CACHE": "🟠",
+                             "DEGRADED": "🔴"}.get(src, "❓")
 
                 # Governance badge
                 gov_badge = {"ACTIVE": "", "ACTIVE_CARRY": " 🔁CARRY", "ORPHAN_WATCH": " ⚠️ORPHAN"}.get(gov, "")

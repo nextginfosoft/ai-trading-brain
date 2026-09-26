@@ -12,6 +12,14 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 
+# Feed sources that are live broker-grade data (full trust, not a fallback).
+LIVE_BROKER_SOURCES = frozenset({"DHAN", "DHAN_WS", "KITE"})
+
+
+def is_live_broker_source(source: Optional[str]) -> bool:
+    return (source or "").upper() in LIVE_BROKER_SOURCES
+
+
 @dataclass
 class PriceBar:
     """Single OHLCV price bar."""
@@ -51,7 +59,7 @@ class TickerQuote:
     oi:             float    = 0.0    # open interest (derivatives)
     iv:             float    = 0.0    # implied volatility
     # ── Feed provenance metadata ──────────────────────────────────────
-    feed_source:         str   = ""    # "DHAN" | "YAHOO" | "CACHE" | "SIM" | ""
+    feed_source:         str   = ""    # "KITE" | "DHAN" | "YAHOO" | "CACHE" | "SIM" | ""
     feed_degraded:       bool  = False # True when no live data; cached LTP served
     fallback_active:     bool  = False # True when Dhan failed and Yahoo/cache used
     consecutive_failures: int  = 0    # consecutive live-fetch failures for this symbol

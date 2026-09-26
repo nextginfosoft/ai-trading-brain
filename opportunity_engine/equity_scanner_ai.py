@@ -1851,6 +1851,7 @@ class EquityScannerAI:
                 # Apply a multiplicative trust penalty based on feed quality tier.
                 _esrc = (_FEED_SOURCE_CACHE.get(_esym) or "").upper()
                 _esrc_multiplier = {
+                    "KITE":  1.00,   # live broker feed — no reduction
                     "DHAN":  1.00,   # live broker feed — no reduction
                     "YAHOO": 0.85,   # real data, slight delay/spread
                     "CACHE": 0.80,   # stale cached quote

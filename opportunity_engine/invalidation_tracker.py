@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from data_feeds.base_feed import LIVE_BROKER_SOURCES
 from utils import get_logger
 
 log = get_logger(__name__)
@@ -59,6 +60,7 @@ FEED_STALE     = "STALE"      # no live data — fell back to stored base_ltp
 # populated with a bad "~1000" batch.  Any stock whose base_ltp is outside
 # the [900, 1100] band (i.e. NOT a genuinely ≈₹1000 stock) is a false positive
 # when its live_ltp falls in this window from a non-DHAN source.
+_LIVE_RAW_SOURCES = LIVE_BROKER_SOURCES | {"LIVE"}   # broker-grade price sources
 _SIM_LO: float   = 975.0
 _SIM_HI: float   = 1025.0
 _SIM_BASE_BAND_LO: float = 900.0
@@ -156,7 +158,7 @@ class InvalidationTracker:
         1. STALE      — live_ltp == base_ltp (cache miss; stored value used)
         2. SYNTHETIC  — live_ltp ≈ 1000 AND base_ltp outside the ≈1000 band
                         AND source is not DHAN (yfinance sim artifact)
-        3. LIVE       — raw_source is "DHAN" or "LIVE"
+        3. LIVE       — raw_source is a live broker feed ("KITE", "DHAN") or "LIVE"
         4. FALLBACK   — everything else (YAHOO, NSE, unknown)
         """
         # STALE: no live price available; fell back to the stored base_ltp
@@ -168,12 +170,12 @@ class InvalidationTracker:
         if (
             _SIM_LO <= live_ltp <= _SIM_HI
             and not (_SIM_BASE_BAND_LO <= base_ltp <= _SIM_BASE_BAND_HI)
-            and raw_source.upper() not in ("DHAN", "LIVE")
+            and raw_source.upper() not in _LIVE_RAW_SOURCES
         ):
             return FEED_SYNTHETIC
 
-        # LIVE: Dhan API returned this price
-        if raw_source.upper() in ("DHAN", "LIVE"):
+        # LIVE: a broker API (Kite / Dhan) returned this price
+        if raw_source.upper() in _LIVE_RAW_SOURCES:
             return FEED_LIVE
 
         # FALLBACK: Yahoo, NSE, or any other non-Dhan source
