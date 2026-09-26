@@ -7,8 +7,10 @@ Run:
 Serves a JSON API under /api/* and the built React app (web_dashboard/frontend/dist).
 Data endpoints are GET-only; nothing here can place, change or cancel trades.
 Every /api/* route except /api/auth/* requires a password login (see auth.py).
-The only writes are the Zerodha (Kite) daily login session: /api/kite/* and
-/kite/callback, which store the broker access token for the engine to use.
+The only writes are broker access: the Zerodha (Kite) daily login session
+(/api/kite/*, /kite/callback) and broker credentials on the Settings page
+(/api/settings/brokers/*, encrypted; saving or removing requires the dashboard
+password again). Secret values are never sent back to the browser.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from broker_auth import kite_session
+from broker_auth import connection_tests, credentials, kite_session
 from web_dashboard import auth, data
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -245,6 +247,84 @@ def kite_callback(request_token: str = "", status: str = "", state: str = "") ->
     except Exception as exc:  # network / invalid token / wrong secret
         return _kite_redirect("error", f"Token exchange failed: {type(exc).__name__}")
     return _kite_redirect("connected")
+
+
+# ── Settings: broker credentials ─────────────────────────────────────────────
+
+reauth_throttle = auth.LoginThrottle()
+
+
+class CredentialsBody(BaseModel):
+    password: str
+    values: Dict[str, str] = {}
+
+
+class ConfirmBody(BaseModel):
+    password: str
+
+
+def _confirm_password(password: str, request: Request):
+    """Re-check the dashboard password before changing credentials. Returns an error response or None."""
+    ip = _client_ip(request)
+    wait = reauth_throttle.retry_after(ip)
+    if wait:
+        return JSONResponse({"detail": f"Too many wrong passwords. Try again in {max(1, wait // 60)} min."},
+                            status_code=429, headers={"Retry-After": str(wait)})
+    if not auth.verify_password(password or "", auth.configured_hash()):
+        reauth_throttle.record_failure(ip)
+        return JSONResponse({"detail": "Incorrect dashboard password"}, status_code=403)
+    reauth_throttle.reset(ip)
+    return None
+
+
+def _broker_or_404(broker: str):
+    if broker not in credentials.BROKERS:
+        return JSONResponse({"detail": f"Unknown broker: {broker}"}, status_code=404)
+    return None
+
+
+@app.get("/api/settings/brokers")
+def settings_brokers() -> dict:
+    return credentials.status()
+
+
+@app.put("/api/settings/brokers/{broker}")
+def settings_save(broker: str, body: CredentialsBody, request: Request) -> JSONResponse:
+    err = _broker_or_404(broker) or _confirm_password(body.password, request)
+    if err:
+        return err
+    try:
+        changed = credentials.save(broker, body.values)
+    except credentials.InvalidInput as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=422)
+    except credentials.StoreLocked as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=503)
+    return JSONResponse({"changed": changed, "status": credentials.status()})
+
+
+@app.post("/api/settings/brokers/{broker}/remove")
+def settings_remove(broker: str, body: ConfirmBody, request: Request) -> JSONResponse:
+    err = _broker_or_404(broker) or _confirm_password(body.password, request)
+    if err:
+        return err
+    try:
+        removed = credentials.remove(broker)
+    except credentials.StoreLocked as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=503)
+    return JSONResponse({"removed": removed, "status": credentials.status()})
+
+
+@app.post("/api/settings/brokers/{broker}/test")
+def settings_test(broker: str) -> JSONResponse:
+    err = _broker_or_404(broker)
+    if err:
+        return err
+    return JSONResponse(connection_tests.run_test(broker))
+
+
+@app.get("/api/settings/audit")
+def settings_audit() -> dict:
+    return {"entries": credentials.audit_log(50)}
 
 
 if os.path.isdir(DIST_DIR):

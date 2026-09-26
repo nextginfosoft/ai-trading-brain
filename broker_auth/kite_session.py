@@ -16,8 +16,9 @@ day (automating the login with stored credentials/TOTP is not allowed). So:
   4. The engine calls load_session() whenever it needs the token, so a new
      login takes effect without restarting anything.
 
-Settings: KITE_API_KEY, KITE_API_SECRET (server .env only), optional
-KITE_SESSION_DIR (default <repo>/data/broker).
+Settings: API key/secret from the dashboard Settings page (encrypted store,
+broker_auth.credentials) or KITE_API_KEY / KITE_API_SECRET in the server .env;
+optional KITE_SESSION_DIR (default <repo>/data/broker).
 """
 
 from __future__ import annotations
@@ -46,11 +47,15 @@ def session_path() -> str:
 
 
 def api_key() -> str:
-    return (os.getenv("KITE_API_KEY") or "").strip()
+    """Settings page value first, then KITE_API_KEY from .env."""
+    from broker_auth import credentials
+    return credentials.get("kite", "api_key")
 
 
 def api_secret() -> str:
-    return (os.getenv("KITE_API_SECRET") or "").strip()
+    """Settings page value first, then KITE_API_SECRET from .env."""
+    from broker_auth import credentials
+    return credentials.get("kite", "api_secret")
 
 
 def is_configured() -> bool:
