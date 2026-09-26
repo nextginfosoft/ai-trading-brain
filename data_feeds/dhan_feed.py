@@ -49,9 +49,9 @@ log = get_logger(__name__)
 # ── Credential helpers ────────────────────────────────────────────────────
 
 def _get_credentials() -> Tuple[str, str]:
-    client_id    = os.getenv("DHAN_CLIENT_ID", "")
-    access_token = os.getenv("DHAN_ACCESS_TOKEN", "")
-    return client_id, access_token
+    """Dashboard Settings (encrypted store) first, then DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN from .env."""
+    from broker_auth import credentials
+    return credentials.get("dhan", "client_id"), credentials.get("dhan", "access_token")
 
 
 # ── Static security ID map (Dhan numeric IDs) ─────────────────────────────
@@ -492,7 +492,25 @@ class DhanFeed(BaseFeed):
         except Exception as exc:
             log.warning("[DhanFeed] Could not persist token to .env: %s", exc)
 
+        # 2b — saved Settings values take priority over .env, so keep the store in step
+        #      (otherwise an older token saved on the Settings page would win).
+        try:
+            from broker_auth import credentials
+            if credentials.is_unlocked():
+                credentials.save("dhan", {"access_token": new_token}, actor="telegram")
+        except Exception as exc:
+            log.warning("[DhanFeed] Could not update saved Dhan token in Settings: %s", type(exc).__name__)
+
         # 3 — reinitialise dhanhq client (also resets circuit breaker)
+        return self._reconnect(trigger="reload_token")
+
+    def reload_credentials(self) -> bool:
+        """Reconnect with the current credentials (Settings page change). Returns True if live."""
+        log.info("[DhanFeed] Credentials changed in Settings — reconnecting.")
+        return self._reconnect(trigger="settings")
+
+    def _reconnect(self, trigger: str) -> bool:
+        """Drop the client and all verification state, then connect with current credentials."""
         self._live    = False
         self._dhan    = None
         self._context = None
@@ -502,6 +520,8 @@ class DhanFeed(BaseFeed):
         self._readiness_verified = False            # Phase 9: must re-verify after token swap
         self._equity_verified   = False             # Phase 11
         self._options_verified  = False             # Phase 11
+        self._token_expires_at  = None              # re-derived from the new token by _connect()
+        self._token_expired_alerted = False
         log.info("[TokenGovernance] warned=False reason=RESET_AFTER_REFRESH")
         self._connect()
         # Phase 5 — Recovery audit: was Dhan restored after token swap?
@@ -509,14 +529,14 @@ class DhanFeed(BaseFeed):
         log.info(
             "[DhanRecoveryAudit] recovered=%s  manual_token_required=True"
             "  token_swapped=True  api_mode=%s"
-            "  cycles_until_recovery=0",
-            _recovered, "LIVE" if _recovered else "FALLBACK",
+            "  cycles_until_recovery=0  trigger=%s",
+            _recovered, "LIVE" if _recovered else "FALLBACK", trigger,
         )
         if _recovered:
             # Phase 1 — subsystem state after recovery
             self._emit_subsystem_state()
             # Phase 9 — session state after token reload
-            self._emit_session_state(trigger="reload_token")
+            self._emit_session_state(trigger=trigger)
             # Phase 2 — readiness probe after token refresh (market hours only)
             if self._is_market_open():
                 self._readiness_probe()

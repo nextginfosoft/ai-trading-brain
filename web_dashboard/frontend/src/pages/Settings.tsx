@@ -38,11 +38,11 @@ const BROKER_NOTES: Record<BrokerId, ReactNode> = {
   ),
 }
 
-// Until the engine reads saved Dhan/AngelOne values (next update), say so plainly.
+// How saved values reach the trading engine.
 const ENGINE_NOTE: Partial<Record<BrokerId, string>> = {
-  dhan: 'Test connection uses these now. The trading engine switches to saved values in the next update; until then it reads the server .env.',
+  dhan: 'The trading engine reconnects with saved values within about 30 seconds — no restart needed.',
   angelone:
-    'Test connection uses these now. The trading engine switches to saved values in the next update; until then it reads the server .env.',
+    'The trading engine logs in again with saved values within about 30 seconds, and automatically every day after that.',
 }
 
 export default function SettingsPage() {
