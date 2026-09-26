@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Activity, CandlestickChart, Filter, LayoutDashboard, LogOut } from 'lucide-react'
+import { Activity, CandlestickChart, Filter, LayoutDashboard, LogOut, Settings as SettingsIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { KiteConnectControl, KiteReturnBanner } from './components/KiteConnect'
@@ -11,6 +11,7 @@ import { duration, marketSession, num, titleCase } from './lib/format'
 import HealthPage from './pages/Health'
 import LoginPage from './pages/Login'
 import OverviewPage from './pages/Overview'
+import SettingsPage from './pages/Settings'
 import SignalsPage from './pages/Signals'
 import TradesPage from './pages/Trades'
 
@@ -19,6 +20,7 @@ const NAV = [
   { to: '/trades', label: 'Trades & P&L', icon: CandlestickChart },
   { to: '/signals', label: 'Signals & decisions', icon: Filter },
   { to: '/health', label: 'System health', icon: Activity },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon },
 ]
 
 const SERVICE_TONE: Record<string, Tone> = { ONLINE: 'profit', IDLE: 'warn', OFFLINE: 'loss', UNKNOWN: 'neutral' }
@@ -183,6 +185,7 @@ function Shell({ onSignOut }: { onSignOut: () => void }) {
               <Route path="/trades" element={<TradesPage />} />
               <Route path="/signals" element={<SignalsPage />} />
               <Route path="/health" element={<HealthPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
