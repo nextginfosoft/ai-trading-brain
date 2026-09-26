@@ -232,9 +232,9 @@ def architecture_diagram():
     d = Drawing(W, H)
     col_w = 42 * mm
     # Column 1: data sources
-    box(d, 0, H - 20 * mm, col_w, 14 * mm, "Yahoo Finance", "free market data (default)", ACCENT_SOFT)
-    box(d, 0, H - 38 * mm, col_w, 14 * mm, "Dhan API", "optional: real-time + options", GRAY_SOFT)
-    box(d, 0, H - 56 * mm, col_w, 14 * mm, "Global markets", "US / Asia / FX / commodities", ACCENT_SOFT)
+    box(d, 0, H - 20 * mm, col_w, 14 * mm, "Zerodha Kite", "primary when logged in today", ACCENT_SOFT)
+    box(d, 0, H - 38 * mm, col_w, 14 * mm, "Dhan / AngelOne", "optional broker feeds", GRAY_SOFT)
+    box(d, 0, H - 56 * mm, col_w, 14 * mm, "Yahoo Finance", "fallback + global markets", ACCENT_SOFT)
     # Column 2: engine
     ex = 60 * mm
     box(d, ex, H - 64 * mm, col_w + 6 * mm, 58 * mm, "Trading engine", "", TEAL_SOFT, TEAL, TEAL)
@@ -246,7 +246,7 @@ def architecture_diagram():
     # Column 3: outputs
     ox = 126 * mm
     box(d, ox, H - 20 * mm, col_w + 6 * mm, 14 * mm, "data/ folder", "telemetry DB + trade journal", GRAY_SOFT)
-    box(d, ox, H - 44 * mm, col_w + 6 * mm, 14 * mm, "Web dashboard", "read-only, password login", ACCENT_SOFT)
+    box(d, ox, H - 44 * mm, col_w + 6 * mm, 14 * mm, "Web dashboard", "monitoring + broker settings", ACCENT_SOFT)
     box(d, ox, H - 66 * mm, col_w + 6 * mm, 14 * mm, "Telegram bot", "alerts + commands", ACCENT_SOFT)
     arrow_right(d, ex + col_w + 6 * mm, ox, H - 13 * mm)
     arrow_down(d, ox + 24 * mm, H - 20 * mm, H - 30 * mm)
@@ -318,7 +318,9 @@ def build():
         "The full daily timeline, from pre-market to end-of-day learning",
         "Every stage of a trading cycle, including the 5-agent debate and the decision math",
         "Risk limits and safety controls, and how the system learns from outcomes",
-        "Market data, the web dashboard, Telegram alerts and commands",
+        "Market data: Zerodha Kite as the primary source, with Dhan, AngelOne and Yahoo as fallbacks",
+        "Broker connections: the daily Zerodha login and the encrypted broker Settings page",
+        "The web dashboard, Telegram alerts and commands",
         "How it is deployed and operated, with a runbook for common tasks",
     ])
     s.append(Spacer(1, 8))
@@ -330,9 +332,9 @@ def build():
     # TOC
     toc = TableOfContents()
     toc.levelStyles = [
-        ParagraphStyle("t0", parent=BODY, fontName="Helvetica-Bold", fontSize=9.8, leading=12.5, leftIndent=0,
-                       spaceBefore=4, spaceAfter=0),
-        ParagraphStyle("t1", parent=BODY, fontSize=8.8, leading=11.5, leftIndent=12, textColor=INK2, spaceAfter=0),
+        ParagraphStyle("t0", parent=BODY, fontName="Helvetica-Bold", fontSize=9.6, leading=11.8, leftIndent=0,
+                       spaceBefore=0.5, spaceAfter=0),
+        ParagraphStyle("t1", parent=BODY, fontSize=8.5, leading=10.4, leftIndent=12, textColor=INK2, spaceAfter=0),
     ]
     # Not the "H1" style, so the Contents heading does not list itself in the TOC.
     s.append(p("Contents", ParagraphStyle("TocHead", parent=H1)))
@@ -352,6 +354,10 @@ def build():
         ["Component", "What it does", "Where in the code"],
         ["Scheduler / orchestrator", "Runs every job at its IST time slot; the single entry point for a cycle",
          "orchestrator/master_orchestrator.py"],
+        ["Market data feeds", "Kite (primary when logged in), Dhan, AngelOne, Yahoo; live-pricing router",
+         "data_feeds/"],
+        ["Broker login + credentials", "Daily Zerodha session, encrypted credential store, connection tests",
+         "broker_auth/"],
         ["Market intelligence", "Indices, VIX, breadth, PCR, sector flows, market regime",
          "market_intelligence/, global_intelligence/"],
         ["Opportunity engine", "Scans stocks and builds trade signals (entry, stop, target)", "opportunity_engine/"],
@@ -363,7 +369,7 @@ def build():
         ["Execution (paper)", "Order timing, paper journal, fill records", "execution_engine/"],
         ["Monitoring + learning", "Open-position checks, EOD learning, strategy tracking",
          "trade_monitoring/, learning_system/, meta_learning/"],
-        ["Web dashboard", "Read-only UI + API with password login", "web_dashboard/"],
+        ["Web dashboard", "Monitoring UI + API with password login; broker Settings page", "web_dashboard/"],
         ["Telegram", "Alerts to a group, operator commands", "notifications/"],
     ], [38 * mm, 78 * mm, 58 * mm], first_col_bold=True))
     s.append(PageBreak())
@@ -371,12 +377,16 @@ def build():
     # 2 Daily timeline
     s.append(p("2. Daily timeline (IST)", H1))
     s.append(p("All times are India Standard Time. The engine runs continuously; the scheduler fires each job at "
-               "its slot. No action is needed from you on a normal day."))
+               "its slot. The one daily action for you: <b>click Connect Zerodha</b> on the dashboard before "
+               "09:45, because Zerodha requires a fresh login every morning (section 8)."))
     s.append(table([
         ["Time", "Job", "What happens"],
+        ["~06:00", "Zerodha session expires", "Yesterday's Kite login ends (Zerodha rule); data falls back until you log in"],
         ["08:00", "Pre-market start", "Loads data and state, runs start-up health checks"],
-        ["08:30 - 09:10", "Warm-up", "Pre-fetches global markets; pre-market refiner updates the watchlist (08:45)"],
-        ["09:15", "Market opens", "Open notification and data-feed readiness probe. No trading yet"],
+        ["08:30 - 09:10", "Warm-up", "Pre-fetches global markets; pre-market refiner updates the watchlist (08:45). "
+                                    "Telegram reminder at 08:30 if Zerodha is not connected"],
+        ["09:15", "Market opens", "Open notification and data-feed readiness probe; second Zerodha reminder if "
+                                  "still not connected. No trading yet"],
         ["09:45", "First trading cycle", "Full 12-stage decision pipeline (section 3). Trading is blocked before "
                                           "09:45 to avoid the opening volatility"],
         ["10:30, 11:30, 13:00, 14:00, 15:00", "Trading cycles", "Same pipeline; each cycle takes roughly 20-40 s"],
@@ -555,35 +565,92 @@ def build():
 
     # 7 Data
     s.append(p("7. Market data", H1))
-    s.append(p("Without a broker connection the system uses <b>Yahoo Finance</b> through the open-source "
-               "<font face='Courier'>yfinance</font> library: no account, no key, no cost."))
+    s.append(p("Indian stocks and indices are read from whichever broker is connected, in a fixed order. Global "
+               "markets (US and Asian indices, currencies, commodities) always come from Yahoo Finance, since the "
+               "brokers do not carry them. Both price routes use the same order: the <b>analysis route</b> "
+               "(scanner, history, charts) and the <b>live-pricing route</b> (stop-loss, target and mark-to-market)."))
+    s.append(p("Source order for Indian symbols", H2))
+    s.append(p("Zerodha Kite (if logged in today) &gt; Dhan (if configured) &gt; AngelOne (if configured) &gt; "
+               "Yahoo Finance &gt; last good cached price &gt; built-in estimate. If equity prices become "
+               "synthetic, the data-truth governor <b>blocks new trades</b> rather than trading on bad data.", CODE))
     s.append(table([
-        ["Data", "Yahoo symbol", "Refresh"],
-        ["NSE stocks", "SYMBOL.NS (e.g. SBIN.NS)", "Prices cached 60 s; history on demand"],
-        ["NIFTY 50 / Bank Nifty", "^NSEI / ^NSEBANK", "Each cycle"],
-        ["India VIX", "^INDIAVIX", "Each cycle"],
-        ["Global markets", "^GSPC, ^N225, USDINR=X, GC=F, CL=F ...", "Every 5 min in the background"],
-    ], [42 * mm, 72 * mm, 60 * mm], first_col_bold=True))
-    s.append(p("Fallback order", H2))
-    s.append(p("Dhan (if a token is configured) &gt; Yahoo Finance &gt; last good cached price &gt; built-in "
-               "estimate. If equity prices become synthetic, the data-truth governor <b>blocks new trades</b> "
-               "rather than trading on bad data.", CODE))
-    s.append(p("Limitations of free data", H2))
+        ["Source", "Provides", "Notes"],
+        ["Zerodha Kite", "Real-time quotes (with bid/ask, volume), NIFTY / Bank Nifty / India VIX, candles from "
+         "1-minute to daily", "Primary. Needs the daily login (section 8). Rate limits respected: quotes about "
+         "1/s in batches of 250, history about 3/s, chunked per interval"],
+        ["Dhan", "Quotes, candles, NSE option chain", "Optional. Needs client ID + access token"],
+        ["AngelOne", "Quotes, candles, option chain", "Optional. Logs in automatically with the saved TOTP secret"],
+        ["Yahoo Finance", "Quotes and history (delayed ~15 min for NSE); all global markets",
+         "Free, no key. Symbols: SBIN.NS, ^NSEI, ^NSEBANK, ^INDIAVIX, ^GSPC, USDINR=X ..."],
+    ], [30 * mm, 68 * mm, 76 * mm], first_col_bold=True))
+    s.append(p("How the Kite feed behaves", H2))
     s += bullets([
-        "Yahoo NSE quotes are delayed (typically around 15 minutes), so paper fills are approximate.",
-        "No NSE option chain: options strategies stay switched off; only stock trades are taken.",
-        "No market depth, so slippage cannot be modelled precisely.",
-        "Unofficial source: occasional throttling shows up as degraded feed status on the dashboard.",
+        "<b>Never invents prices.</b> If Kite cannot answer, it returns nothing and the next source is used.",
+        "<b>Picks up a new login immediately</b>, without a restart.",
+        "<b>Expired or revoked token:</b> Kite switches itself off and the system continues on the fallback "
+        "sources until you log in again.",
+        "<b>Plan without historical data:</b> candles come from the fallbacks for that day; live quotes stay on Kite.",
+        "Kite prices count as fully trusted live data, the same as Dhan, in every data-quality check.",
     ])
-    s.append(p("Adding a Dhan account and API token later gives real-time prices, the option chain and exact tick "
-               "sizes, with no code changes.", NOTE))
+    s.append(p("Limitations", H2))
+    s += bullets([
+        "Options strategies need a live option chain (Dhan or AngelOne); with Kite or Yahoo alone, only stock "
+        "trades are taken.",
+        "Without any broker connected, prices are Yahoo's delayed quotes, so paper fills are approximate.",
+    ])
     s.append(PageBreak())
 
-    # 8 Dashboard
-    s.append(p("8. Web dashboard", H1))
-    s.append(p("A read-only web app (FastAPI backend + React frontend) that reads the engine's telemetry "
-               "database and trade journal. It cannot place, change or cancel trades. It refreshes every 5 "
-               "seconds and works on phones."))
+    # 8 Brokers
+    s.append(p("8. Broker connections and Settings", H1))
+    s.append(p("Broker credentials are managed on the dashboard's <b>Settings</b> page, with no SSH needed. "
+               "Trading stays in paper mode: brokers are used for market data, and the order code is only "
+               "used if live trading is explicitly authorised."))
+    s.append(table([
+        ["Broker", "Credentials", "Daily login", "Engine picks up changes"],
+        ["Zerodha (Kite)", "API key, API secret", "Click <b>Connect Zerodha</b> each morning (Zerodha rule)",
+         "Immediately"],
+        ["Dhan", "Client ID, access token", "None; replace the token when it expires", "Within about 30 seconds"],
+        ["AngelOne", "API key, client ID, PIN, TOTP secret", "Automatic, using the saved TOTP secret",
+         "Within about 30 seconds"],
+    ], [28 * mm, 42 * mm, 58 * mm, 46 * mm], first_col_bold=True))
+    s.append(p("Daily Zerodha login", H2))
+    s += bullets([
+        "Click <b>Connect Zerodha</b> in the dashboard header (or on the Settings page), log in on Zerodha's own "
+        "page, and you are sent back automatically. Your Zerodha password never passes through the system.",
+        "The server swaps Zerodha's one-time code for the day's access token and stores it privately on the "
+        "server (never in git). It expires around 06:00 the next morning.",
+        "The return page only accepts a one-time code created by your click (valid 10 minutes, usable once).",
+        "Telegram reminds the group at 08:30 and 09:15 on weekdays if Zerodha is not connected.",
+    ])
+    s.append(p("Settings page and credential security", H2))
+    s += bullets([
+        "Each broker card shows every field as <b>Set</b> with a masked hint (last 4 characters) and where it "
+        "comes from (<b>Settings</b> or <b>.env</b>), or Not set. Saved secrets are never sent back to the browser.",
+        "<b>Add / Update</b> changes only the fields you fill in; <b>Remove</b> deletes saved values (.env values "
+        "still apply). Both ask for the dashboard password again, with their own 5-attempt lockout.",
+        "<b>Test connection</b> checks the credentials against the broker (Dhan: fund limits; AngelOne: login "
+        "then logout; Zerodha: profile once logged in). Messages never contain credential values.",
+        "Credentials are encrypted (Fernet) in <font face='Courier'>data/broker/credentials.enc</font> with a key "
+        "(CREDENTIALS_KEY) kept only in the server .env, apart from the encrypted file. Without the key the store "
+        "is locked and only .env values are used.",
+        "Lookup order for every value: saved on the Settings page, then the server .env.",
+        "A change log records when each broker changed and which fields, never the values.",
+    ])
+    s.append(p("How changes reach the engine", H2))
+    s += bullets([
+        "A background watcher checks the credential store every 30 seconds and reconnects <b>only the broker whose "
+        "values actually changed</b>; re-saving identical values is ignored.",
+        "Telegram <font face='Courier'>/token</font> (Dhan, private chat only) also updates the saved value, so "
+        "the newest token always wins.",
+    ])
+    s.append(PageBreak())
+
+    # 9 Dashboard
+    s.append(p("9. Web dashboard", H1))
+    s.append(p("A web app (FastAPI backend + React frontend) that reads the engine's telemetry database and trade "
+               "journal. It cannot place, change or cancel trades; the only things it can change are broker "
+               "access (the daily Zerodha login and the Settings page). It refreshes every 5 seconds and works on "
+               "phones."))
     s.append(table([
         ["Page", "What you see"],
         ["Overview", "Total and today's P&amp;L, win rate, open positions, account equity, equity curve, latest "
@@ -593,6 +660,10 @@ def build():
         ["Signals &amp; decisions", "Where signals drop out, top rejection reasons, decisions by strategy, "
          "decision log with each agent's score"],
         ["System health", "Engine status, cycle durations, agent health, live event stream, end-of-day report"],
+        ["Settings", "Broker cards (Zerodha, Dhan, AngelOne) with masked status, Update / Test / Remove, and the "
+         "recent-changes log (section 8)"],
+        ["Header (all pages)", "PAPER/LIVE, engine status, market session, regime, VIX, next-cycle countdown, and "
+         "Connect Zerodha / Zerodha connected"],
     ], [34 * mm, 140 * mm], first_col_bold=True))
     s.append(p("Login and security", H2))
     s += bullets([
@@ -606,14 +677,15 @@ def build():
     ])
     s.append(PageBreak())
 
-    # 9 Telegram
-    s.append(p("9. Telegram alerts and commands", H1))
+    # 10 Telegram
+    s.append(p("10. Telegram alerts and commands", H1))
     s.append(p("The engine posts alerts to a Telegram group and answers commands. In a group, add "
                "<font face='Courier'>@&lt;bot username&gt;</font> after a command (for example "
                "<font face='Courier'>/status@TradeSenseAI_bot</font>); in a private chat it is not needed."))
     s.append(p("Alerts", H2))
     s += bullets([
-        "Engine start-up and online status (plus a Dhan token prompt while no broker is connected)",
+        "Engine start-up and online status, including whether Zerodha is connected",
+        "Zerodha login reminders at 08:30 and 09:15 on weekdays while not connected",
         "Trade approvals and exits with entry, stop, target and P&amp;L",
         "Kill-switch and data-feed warnings",
         "End-of-day summary after 15:35",
@@ -630,8 +702,8 @@ def build():
                "/eod, /help. Never post a broker token in a group; the bot refuses /token there.", SMALL))
     s.append(PageBreak())
 
-    # 10 Deployment
-    s.append(p("10. Deployment", H1))
+    # 11 Deployment
+    s.append(p("11. Deployment", H1))
     s.append(p("The system runs as two Docker containers on a Linux VPS, alongside other applications that must "
                "not be disturbed. A shared Caddy reverse proxy owns ports 80/443 and serves HTTPS; each "
                "application is added as one site block."))
@@ -644,7 +716,10 @@ def build():
          "docker-compose.override.yml"],
         ["HTTPS", "Reverse proxy site block for the dashboard domain with an automatic Let's Encrypt certificate; "
          "DNS record is DNS-only (not proxied)"],
-        ["Settings", ".env on the server only (never committed): paper mode, capital, dashboard hash, Telegram"],
+        ["Settings", ".env on the server only (never committed): paper mode, capital, dashboard hash, Telegram, "
+         "CREDENTIALS_KEY"],
+        ["Broker data", "data/broker/ holds the Zerodha session and the encrypted credentials (git-ignored, "
+         "owner-only). It is the dashboard container's only writable folder; the rest of data/ is read-only"],
         ["Image build", "Multi-stage Dockerfile: Node builds the React frontend; the Python image serves it"],
     ], [34 * mm, 140 * mm], first_col_bold=True))
     s.append(p("Isolation rules for a shared server", H2))
@@ -673,8 +748,8 @@ def build():
     ])
     s.append(PageBreak())
 
-    # 11 Settings
-    s.append(p("11. Settings reference", H1))
+    # 12 Settings
+    s.append(p("12. Settings reference", H1))
     s.append(p("All settings are environment variables in <font face='Courier'>.env</font>, which is git-ignored. "
                "<font face='Courier'>.env.example</font> in the repository documents them without real values."))
     s.append(table([
@@ -682,7 +757,14 @@ def build():
         ["PAPER_TRADING / LIVE_TRADING_AUTHORIZED", "Paper mode unless BOTH are set for live trading"],
         ["TOTAL_CAPITAL", "Capital used for sizing (rupees)"],
         ["MAX_POSITIONS", "Optional override of the max simultaneous positions"],
-        ["ACTIVE_BROKER, DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN", "Broker selection and Dhan credentials (optional)"],
+        ["ACTIVE_BROKER", "Broker that would place orders if live trading were authorised"],
+        ["CREDENTIALS_KEY", "Encrypts credentials saved on the Settings page. Server only; back it up (losing it "
+         "means re-entering saved credentials)"],
+        ["KITE_API_KEY, KITE_API_SECRET", "Zerodha credentials (.env fallback; Settings page takes priority)"],
+        ["DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN", "Dhan credentials (.env fallback)"],
+        ["ANGELONE_API_KEY, _CLIENT_ID, _PASSWORD, _TOTP_SECRET", "AngelOne credentials (.env fallback)"],
+        ["DASHBOARD_PUBLIC_URL", "Dashboard link used in the Telegram Zerodha reminders"],
+        ["KITE_SESSION_DIR / CREDENTIALS_DIR", "Optional storage folders (default data/broker)"],
         ["TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID", "Bot token and the chat (or group) that receives alerts"],
         ["TELEGRAM_WHITELIST_IDS", "Telegram user ids allowed to run control commands"],
         ["DASHBOARD_PASSWORD_HASH", "Dashboard login (hash only)"],
@@ -694,20 +776,24 @@ def build():
     ], [72 * mm, 102 * mm], first_col_bold=True))
     s.append(PageBreak())
 
-    # 12 Runbook
-    s.append(p("12. Operations runbook", H1))
+    # 13 Runbook
+    s.append(p("13. Operations runbook", H1))
     s.append(table([
         ["Task", "How"],
-        ["Daily check", "Dashboard header shows Engine online and Market open from 09:45; Telegram posts "
-         "appear; System health shows cycles completing"],
+        ["Every morning", "Before 09:45: open the dashboard and click <b>Connect Zerodha</b>"],
+        ["Daily check", "Dashboard header shows Zerodha connected, Engine online and Market open from 09:45; "
+         "Telegram posts appear; System health shows cycles completing"],
+        ["Add or replace broker credentials", "Dashboard: Settings, broker card, Update, enter the changed "
+         "fields and your dashboard password, Save, then Test connection. Picked up within about 30 seconds"],
         ["Set / change dashboard password", "On the server: <font face='Courier'>docker compose exec "
          "ai-trading-brain python -m web_dashboard.set_password</font>, then restart the dashboard container"],
         ["View engine logs", "<font face='Courier'>docker logs --tail 200 ai-trading-brain</font>"],
         ["Restart only TradeSense", "<font face='Courier'>cd /opt/tradesense &amp;&amp; docker compose "
          "restart</font>"],
         ["Pause / resume trading", "Telegram (admin): /pause or /resume"],
-        ["Connect Dhan data", "Add DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN to the server .env and restart the engine, "
-         "or send /token to the bot in a private chat"],
+        ["Renew the Dhan token", "Settings page (Dhan card), or send /token to the bot in a private chat"],
+        ["Back up the credential key", "Keep a copy of CREDENTIALS_KEY from the server .env somewhere safe and "
+         "private; without it, saved credentials must be re-entered"],
         ["Change capital", "Edit TOTAL_CAPITAL in the server .env and restart the engine"],
         ["Server reboot", "Only at a quiet time (it restarts every application on the server); all containers "
          "restart automatically"],
@@ -726,6 +812,14 @@ def build():
         ["Telegram silent", "Check the engine log for 'Telegram=enabled'; a basic group converted to a "
          "supergroup gets a new -100... id, so update TELEGRAM_CHAT_ID"],
         ["Locked out of the dashboard", "5 failed attempts: wait 15 minutes"],
+        ["Header shows Connect Zerodha during market hours", "Not logged in today (or the session expired): click "
+         "it and log in. Until then data comes from the fallback sources"],
+        ["Red message after Zerodha login", "Redirect URL in the Kite developer console must be exactly "
+         "https://&lt;dashboard-domain&gt;/kite/callback; or the link expired, so click Connect Zerodha again"],
+        ["Settings page says the store is locked", "CREDENTIALS_KEY missing or changed on the server; .env values "
+         "still work. Restore the key, or set a new one and re-enter the saved credentials"],
+        ["Test connection fails", "Read the message on the card: expired Dhan token, wrong AngelOne PIN or TOTP "
+         "secret (base32), or Zerodha not logged in yet"],
     ], [58 * mm, 116 * mm], first_col_bold=True))
 
     doc.multiBuild(s)
