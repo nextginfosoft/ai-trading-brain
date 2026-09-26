@@ -229,6 +229,72 @@ export async function kiteDisconnect(): Promise<void> {
   await fetch('/api/kite/disconnect', { method: 'POST', credentials: 'same-origin' })
 }
 
+// ── Settings: broker credentials (values are never returned, only status) ──
+
+export type BrokerId = 'kite' | 'dhan' | 'angelone'
+
+export type BrokerField = {
+  label: string
+  secret: boolean
+  set: boolean
+  source: 'settings' | 'env' | null
+  hint: string
+}
+
+export type BrokerStatus = {
+  label: string
+  fields: Record<string, BrokerField>
+  complete: boolean
+  updated_at: string | null
+}
+
+export type CredentialStatus = {
+  unlocked: boolean
+  lock_reason: string | null
+  brokers: Record<BrokerId, BrokerStatus>
+}
+
+export type AuditEntry = { ts: string; action: 'save' | 'remove'; broker: BrokerId; fields: string[]; actor: string }
+
+export const useBrokerSettings = () =>
+  useQuery({
+    queryKey: ['settings', 'brokers'],
+    queryFn: () => getJson<CredentialStatus>('/api/settings/brokers'),
+    refetchInterval: 30_000,
+  })
+
+export const useSettingsAudit = () =>
+  useQuery({
+    queryKey: ['settings', 'audit'],
+    queryFn: () => getJson<{ entries: AuditEntry[] }>('/api/settings/audit'),
+    refetchInterval: 60_000,
+  })
+
+async function sendJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (res.status === 401) {
+    unauthorizedHandler()
+    throw new Error('Session expired — please sign in again')
+  }
+  const data = (await res.json().catch(() => ({}))) as T & { detail?: string }
+  if (!res.ok) throw new Error(data.detail || `Request failed (HTTP ${res.status})`)
+  return data
+}
+
+export const saveBrokerCredentials = (broker: BrokerId, password: string, values: Record<string, string>) =>
+  sendJson<{ changed: string[] }>('PUT', `/api/settings/brokers/${broker}`, { password, values })
+
+export const removeBrokerCredentials = (broker: BrokerId, password: string) =>
+  sendJson<{ removed: boolean }>('POST', `/api/settings/brokers/${broker}/remove`, { password })
+
+export const testBrokerConnection = (broker: BrokerId) =>
+  sendJson<{ ok: boolean; message: string }>('POST', `/api/settings/brokers/${broker}/test`)
+
 function usePolled<T>(key: string, path: string, refetchInterval = REFRESH_MS) {
   return useQuery({
     queryKey: [key, path],
