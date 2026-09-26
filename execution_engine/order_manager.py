@@ -29,10 +29,9 @@ from models.portfolio     import Portfolio, Position
 from models.agent_output  import DecisionResult
 from config import (ACTIVE_BROKER, TOTAL_CAPITAL,
                     ZERODHA_API_KEY, ZERODHA_ACCESS_TOKEN,
-                    DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN,
-                    ANGELONE_API_KEY, ANGELONE_CLIENT_ID,
-                    ANGELONE_PASSWORD, ANGELONE_TOTP_SECRET,
                     ATR_ZONE_MULTIPLIER)
+# Dhan / AngelOne credentials are read at connect time via broker_auth.credentials
+# (dashboard Settings page first, then .env) — see _load_broker().
 from utils import get_logger
 
 log = get_logger(__name__)
@@ -2605,11 +2604,13 @@ class OrderManager:
             return ZerodhaBroker(ZERODHA_API_KEY, ZERODHA_ACCESS_TOKEN)
         elif broker == "dhan":
             from execution_engine.brokers.dhan_broker import DhanBroker
-            return DhanBroker(DHAN_CLIENT_ID, DHAN_ACCESS_TOKEN)
+            from broker_auth import credentials  # Settings page first, then .env
+            return DhanBroker(credentials.get("dhan", "client_id"), credentials.get("dhan", "access_token"))
         elif broker == "angelone":
             from execution_engine.brokers.angelone_broker import AngelOneBroker
-            return AngelOneBroker(ANGELONE_API_KEY, ANGELONE_CLIENT_ID,
-                                  ANGELONE_PASSWORD, ANGELONE_TOTP_SECRET)
+            from broker_auth import credentials  # Settings page first, then .env
+            _c = credentials.get_all("angelone")
+            return AngelOneBroker(_c["api_key"], _c["client_id"], _c["password"], _c["totp_secret"])
         else:
             log.warning("[OrderManager] Unknown broker '%s' — simulation mode.", broker)
             return None

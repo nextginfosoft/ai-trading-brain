@@ -235,14 +235,27 @@ class AngelOneFeed(BaseFeed):
 
     # ── Connection & session ────────────────────────────────────────────────
 
+    def reload_credentials(self) -> bool:
+        """Log in again with the current credentials (Settings page change). Returns True if live."""
+        log.info("[AngelOneFeed] Credentials changed in Settings — logging in again.")
+        with self._lock:
+            self._connected = False
+            self._smart = None
+            self._session_ts = None
+            self._credentials_configured = None
+            self._last_reconnect_attempt = None
+            self._connect()
+        return self.is_live
+
     def _connect(self) -> None:
         try:
             import pyotp
             from SmartApi import SmartConnect
-            from config import (
-                ANGELONE_API_KEY, ANGELONE_CLIENT_ID,
-                ANGELONE_PASSWORD, ANGELONE_TOTP_SECRET,
-            )
+            from broker_auth import credentials
+            # Dashboard Settings (encrypted store) first, then ANGELONE_* from .env
+            _c = credentials.get_all("angelone")
+            ANGELONE_API_KEY, ANGELONE_CLIENT_ID = _c["api_key"], _c["client_id"]
+            ANGELONE_PASSWORD, ANGELONE_TOTP_SECRET = _c["password"], _c["totp_secret"]
             if not all([ANGELONE_API_KEY, ANGELONE_CLIENT_ID,
                         ANGELONE_PASSWORD, ANGELONE_TOTP_SECRET]):
                 self._credentials_configured = False

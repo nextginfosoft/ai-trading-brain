@@ -442,8 +442,9 @@ class OptionsOrderManager:
         broker_name = getattr(_cfg, "ACTIVE_BROKER", "dhan").lower()
         if broker_name == "dhan":
             from execution_engine.brokers.dhan_broker import DhanBroker
-            client_id    = getattr(_cfg, "DHAN_CLIENT_ID", "")
-            access_token = getattr(_cfg, "DHAN_ACCESS_TOKEN", "")
+            from broker_auth import credentials  # Settings page first, then .env
+            client_id    = credentials.get("dhan", "client_id")
+            access_token = credentials.get("dhan", "access_token")
             if not client_id or not access_token:
                 log.warning(
                     "[OptionsOrderManager] DHAN_CLIENT_ID or DHAN_ACCESS_TOKEN not set — "

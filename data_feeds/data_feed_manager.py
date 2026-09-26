@@ -259,6 +259,58 @@ class DataFeedManager:
         log.info("[DataFeedManager] Initialised. %s", self.status().summary())
         # Hard startup validation — alert explicitly when Dhan is absent
         self._startup_feed_validation()
+        # Pick up broker credential changes from the dashboard Settings page without a restart
+        self._start_credential_watch()
+
+    # ── Broker credential hot-reload (dashboard Settings page) ────────────
+
+    CREDENTIAL_WATCH_SECONDS = 30
+    _RELOADABLE_BROKERS = ("dhan", "angelone")   # Kite re-reads its session/credentials on every use
+
+    @staticmethod
+    def _credential_fingerprints() -> Dict[str, str]:
+        """Hash of each broker's effective credentials — detects real changes, never logged."""
+        import hashlib
+        from broker_auth import credentials
+        return {b: hashlib.sha256("\x00".join(credentials.get_all(b).values()).encode()).hexdigest()
+                for b in DataFeedManager._RELOADABLE_BROKERS}
+
+    def _start_credential_watch(self) -> None:
+        from broker_auth import credentials
+        self._cred_mtime = credentials.store_mtime()
+        self._cred_prints = self._credential_fingerprints()
+        threading.Thread(target=self._credential_watch_loop, daemon=True, name="CredentialWatch").start()
+
+    def _credential_watch_loop(self) -> None:
+        import time as _time
+        while True:
+            _time.sleep(self.CREDENTIAL_WATCH_SECONDS)
+            try:
+                self.check_credential_changes()
+            except Exception as exc:
+                log.warning("[CredentialWatch] check failed: %s", type(exc).__name__)
+
+    def check_credential_changes(self) -> List[str]:
+        """Reconnect any broker whose saved credentials changed. Returns the brokers reloaded."""
+        from broker_auth import credentials
+        mtime = credentials.store_mtime()
+        if mtime == self._cred_mtime:
+            return []
+        self._cred_mtime = mtime
+        new_prints = self._credential_fingerprints()
+        reloaded = []
+        for broker in self._RELOADABLE_BROKERS:
+            if new_prints.get(broker) == self._cred_prints.get(broker):
+                continue
+            feed = self.dhan if broker == "dhan" else self.angelone
+            reload = getattr(feed, "reload_credentials", None)
+            if reload is None:
+                continue
+            live = reload()
+            reloaded.append(broker)
+            log.info("[CredentialWatch] %s credentials changed in Settings — reconnected, live=%s", broker, live)
+        self._cred_prints = new_prints
+        return reloaded
 
     def _startup_feed_validation(self) -> None:
         """Log a structured feed validation block at startup."""
