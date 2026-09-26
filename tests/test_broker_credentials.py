@@ -56,7 +56,7 @@ def test_status_never_contains_secrets():
     status = credentials.status()
     assert SECRET not in json.dumps(status)
     field = status["brokers"]["dhan"]["fields"]["access_token"]
-    assert field == {"label": "Access token", "secret": True, "set": True, "source": "settings", "hint": "••••9876"}
+    assert field == {"label": "Access token", "secret": True, "set": True, "source": "settings", "hint": "••••9876", "optional": False}
     assert status["brokers"]["dhan"]["complete"] and not status["brokers"]["angelone"]["complete"]
 
 

@@ -25,7 +25,8 @@ def _scrub(message: str, values: Dict[str, str]) -> str:
 
 
 def _missing(broker: str, values: Dict[str, str]) -> Optional[dict]:
-    missing = [credentials.BROKERS[broker][f][1] for f, v in values.items() if not v]
+    optional = credentials.OPTIONAL_FIELDS.get(broker, frozenset())
+    missing = [credentials.BROKERS[broker][f][1] for f, v in values.items() if not v and f not in optional]
     if missing:
         return {"ok": False, "message": "Missing: " + ", ".join(missing)}
     return None
@@ -38,6 +39,10 @@ def test_kite(client_factory: Optional[Callable] = None) -> dict:
         return missing
     session = kite_session.load_session()
     if not session:
+        from broker_auth import kite_autologin
+        if kite_autologin.is_enabled():
+            return {"ok": True, "message": "All set. Not logged in yet today — use Log in now, or wait for the "
+                                           "automatic login (from 08:00 IST)."}
         return {"ok": True, "message": "Key and secret saved. Click Connect Zerodha to log in and verify them."}
     if client_factory is None:
         from kiteconnect import KiteConnect

@@ -1,14 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { CheckCircle2, Eye, EyeOff, KeyRound, Lock, PlugZap, ShieldAlert, Trash2, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, KeyRound, Lock, PlugZap, ShieldAlert, Trash2, TriangleAlert, Zap } from 'lucide-react'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { KiteConnectControl } from '../components/KiteConnect'
 import { Badge, Card, DataTable, EmptyState, QueryState } from '../components/ui'
 import {
+  kiteAutoLogin,
   removeBrokerCredentials,
   saveBrokerCredentials,
   testBrokerConnection,
   useBrokerSettings,
+  useKiteStatus,
   useSettingsAudit,
   type BrokerId,
   type BrokerStatus,
@@ -20,8 +22,10 @@ const BROKER_ORDER: BrokerId[] = ['kite', 'dhan', 'angelone']
 const BROKER_NOTES: Record<BrokerId, ReactNode> = {
   kite: (
     <>
-      From <span className="text-ink-2">developers.kite.trade</span> → your app. Zerodha requires a login every
-      morning: use <span className="text-ink-2">Connect Zerodha</span> after saving.
+      API key and secret from <span className="text-ink-2">developers.kite.trade</span> → your app. Zerodha needs a
+      login every morning: add your user ID, password and TOTP secret key (the key shown under "Can't scan the QR
+      code?" when you enable TOTP in Kite) to log in automatically at 08:00 IST, or use{' '}
+      <span className="text-ink-2">Connect Zerodha</span> each day.
     </>
   ),
   dhan: (
@@ -40,6 +44,8 @@ const BROKER_NOTES: Record<BrokerId, ReactNode> = {
 
 // How saved values reach the trading engine.
 const ENGINE_NOTE: Partial<Record<BrokerId, string>> = {
+  kite:
+    'Automatic login is not an official Zerodha API: it uses the Kite web login and may stop working if Zerodha changes it (Connect Zerodha still works). A wrong password or TOTP pauses it until you save new values. Anyone with this dashboard password can use these credentials — keep it strong.',
   dhan: 'The trading engine reconnects with saved values within about 30 seconds — no restart needed.',
   angelone:
     'The trading engine logs in again with saved values within about 30 seconds, and automatically every day after that.',
@@ -184,7 +190,10 @@ function BrokerCard({ id, status, locked }: { id: BrokerId; status: BrokerStatus
         <dl className="space-y-1.5">
           {Object.entries(status.fields).map(([key, f]) => (
             <div key={key} className="flex items-center justify-between gap-3 rounded-lg bg-panel-2 px-3 py-2">
-              <dt className="text-[13px] text-ink-2">{f.label}</dt>
+              <dt className="text-[13px] text-ink-2">
+                {f.label}
+                {f.optional && <span className="ml-1.5 text-[11px] text-ink-3">auto-login</span>}
+              </dt>
               <dd className="flex items-center gap-2 text-xs">
                 {f.set ? (
                   <>
@@ -208,6 +217,7 @@ function BrokerCard({ id, status, locked }: { id: BrokerId; status: BrokerStatus
               <div key={key}>
                 <label htmlFor={inputId} className="mb-1 block text-xs text-ink-2">
                   {f.label}
+                  {f.optional && <span className="ml-1.5 text-ink-3">(optional — for automatic login)</span>}
                   {f.set && <span className="ml-1.5 text-ink-3">(current {f.hint})</span>}
                 </label>
                 <div className="relative">
@@ -295,6 +305,7 @@ function BrokerCard({ id, status, locked }: { id: BrokerId; status: BrokerStatus
               <KiteConnectControl />
             </div>
           )}
+          {id === 'kite' && <KiteAutoLoginPanel />}
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={() => { setMode('edit'); setNotice('') }}
@@ -327,6 +338,61 @@ function BrokerCard({ id, status, locked }: { id: BrokerId; status: BrokerStatus
         </>
       )}
     </Card>
+  )
+}
+
+function KiteAutoLoginPanel() {
+  const { data } = useKiteStatus()
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const auto = data?.auto_login
+  if (!auto?.enabled) return null
+
+  async function onLogin() {
+    setBusy(true)
+    setResult(null)
+    try {
+      setResult(await kiteAutoLogin())
+    } catch (err) {
+      setResult({ ok: false, message: err instanceof Error ? err.message : 'Login failed' })
+    } finally {
+      setBusy(false)
+      queryClient.invalidateQueries({ queryKey: ['kite'] })
+    }
+  }
+
+  const last = result ?? (auto.last_attempt ? { ok: Boolean(auto.ok), message: auto.message } : null)
+  return (
+    <div className="mt-3 rounded-lg bg-panel-2 px-3 py-2.5 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-ink-2">
+          <Zap className="size-3.5 text-accent" aria-hidden />
+          Automatic login {auto.blocked ? <Badge tone="loss">Paused</Badge> : <Badge tone="profit">On</Badge>}
+        </span>
+        {!data?.connected && (
+          <button
+            onClick={onLogin}
+            disabled={busy}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-line-strong px-2.5 text-xs text-ink hover:bg-panel-3 disabled:opacity-40"
+          >
+            {busy ? 'Logging in…' : 'Log in now'}
+          </button>
+        )}
+      </div>
+      {last && (
+        <p role="status" className={clsx('mt-2 flex items-start gap-1.5', last.ok ? 'text-profit' : 'text-loss')}>
+          {last.ok ? <CheckCircle2 className="mt-px size-3.5 shrink-0" aria-hidden /> : <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />}
+          <span>
+            {last.message}
+            {!result && auto.last_attempt && <span className="ml-1 text-ink-3">({time(auto.last_attempt)})</span>}
+          </span>
+        </p>
+      )}
+      {auto.blocked && (
+        <p className="mt-1.5 text-ink-3">Paused after Zerodha rejected the login. Save corrected values to resume.</p>
+      )}
+    </div>
   )
 }
 

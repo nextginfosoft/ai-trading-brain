@@ -212,6 +212,16 @@ export type KiteStatus = {
   user_name: string
   login_at: string | null
   expires_at: string | null
+  auto_login: KiteAutoLoginStatus
+}
+
+export type KiteAutoLoginStatus = {
+  enabled: boolean
+  last_attempt: string | null
+  ok: boolean | null
+  message: string
+  actor: 'engine' | 'dashboard' | null
+  blocked: boolean
 }
 
 export const useKiteStatus = () =>
@@ -223,6 +233,17 @@ export async function kiteLoginUrl(): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as { url?: string; detail?: string }
   if (!res.ok || !body.url) throw new Error(body.detail || `Could not start Zerodha login (HTTP ${res.status})`)
   return body.url
+}
+
+/** Run the automatic Zerodha login now (user ID + password + TOTP saved in Settings). */
+export async function kiteAutoLogin(): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch('/api/kite/auto-login', { method: 'POST', credentials: 'same-origin' })
+  if (res.status === 401) {
+    unauthorizedHandler()
+    throw new Error('Session expired — please sign in again')
+  }
+  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string; detail?: string }
+  return { ok: Boolean(body.ok), message: body.message || body.detail || `Login failed (HTTP ${res.status})` }
 }
 
 export async function kiteDisconnect(): Promise<void> {
@@ -239,6 +260,7 @@ export type BrokerField = {
   set: boolean
   source: 'settings' | 'env' | null
   hint: string
+  optional: boolean
 }
 
 export type BrokerStatus = {

@@ -2,8 +2,7 @@
 Zerodha Kite Connect session management.
 
 Kite access tokens are valid for one trading day: Zerodha expires them at
-about 06:00 IST the next morning, and its terms require a manual login each
-day (automating the login with stored credentials/TOTP is not allowed). So:
+about 06:00 IST the next morning, so a fresh login is needed each day:
 
   1. The dashboard's "Connect Zerodha" button asks for a login URL
      (login_url(state)), with a one-time `state` echoed back by Kite via
@@ -15,6 +14,10 @@ day (automating the login with stored credentials/TOTP is not allowed). So:
      (mode 600, git-ignored).
   4. The engine calls load_session() whenever it needs the token, so a new
      login takes effect without restarting anything.
+
+Optional: with the Zerodha user ID, password and TOTP secret saved on the
+Settings page, broker_auth.kite_autologin performs steps 1-3 automatically.
+If a user ID is saved, a login for any other Zerodha account is rejected.
 
 Settings: API key/secret from the dashboard Settings page (encrypted store,
 broker_auth.credentials) or KITE_API_KEY / KITE_API_SECRET in the server .env;
@@ -140,6 +143,15 @@ def public_status(now: Optional[datetime] = None) -> dict:
     }
 
 
+class WrongAccount(RuntimeError):
+    """Zerodha logged in a different account than the saved user ID."""
+
+
+def expected_user_id() -> str:
+    from broker_auth import credentials
+    return credentials.get("kite", "user_id").upper()
+
+
 def exchange_request_token(request_token: str, client_factory=None) -> dict:
     """Swap Zerodha's one-time request_token for an access token and save it."""
     if not is_configured():
@@ -149,4 +161,7 @@ def exchange_request_token(request_token: str, client_factory=None) -> dict:
         client_factory = KiteConnect
     kite = client_factory(api_key=api_key())
     data = kite.generate_session(request_token, api_secret=api_secret())
+    expected, actual = expected_user_id(), str(data.get("user_id", "")).upper()
+    if expected and actual != expected:
+        raise WrongAccount(f"Zerodha logged in as {actual or 'an unknown account'}, but Settings expects {expected}")
     return save_session(data["access_token"], data.get("user_id", ""), data.get("user_name", ""))

@@ -37,8 +37,11 @@ _LOCK = threading.Lock()
 # broker → field → (env var fallback, label, is_secret)
 BROKERS: Dict[str, Dict[str, tuple]] = {
     "kite": {
-        "api_key": ("KITE_API_KEY", "API key", False),
-        "api_secret": ("KITE_API_SECRET", "API secret", True),
+        "user_id": ("KITE_USER_ID", "Zerodha user ID", False),
+        "password": ("KITE_PASSWORD", "Zerodha login password", True),
+        "api_key": ("KITE_API_KEY", "Kite Connect API key", False),
+        "api_secret": ("KITE_API_SECRET", "Kite Connect API secret", True),
+        "totp_secret": ("KITE_TOTP_SECRET", "TOTP secret key", True),
     },
     "dhan": {
         "client_id": ("DHAN_CLIENT_ID", "Client ID", False),
@@ -51,6 +54,8 @@ BROKERS: Dict[str, Dict[str, tuple]] = {
         "totp_secret": ("ANGELONE_TOTP_SECRET", "TOTP secret", True),
     },
 }
+# Fields a broker works without (Kite: user ID / password / TOTP only enable the automatic daily login).
+OPTIONAL_FIELDS: Dict[str, frozenset] = {"kite": frozenset({"user_id", "password", "totp_secret"})}
 BROKER_LABELS = {"kite": "Zerodha (Kite)", "dhan": "Dhan", "angelone": "AngelOne"}
 
 
@@ -157,7 +162,9 @@ def get_all(broker: str) -> Dict[str, str]:
 
 
 def is_complete(broker: str) -> bool:
-    return all(get_all(broker).values())
+    """All required fields set (optional ones don't count)."""
+    optional = OPTIONAL_FIELDS.get(broker, frozenset())
+    return all(v for f, v in get_all(broker).items() if f not in optional)
 
 
 def store_mtime() -> Optional[int]:
@@ -186,9 +193,10 @@ def status() -> dict:
             e_val = (os.getenv(env_name) or "").strip()
             value, source = (s_val, "settings") if s_val else ((e_val, "env") if e_val else ("", None))
             out_fields[field] = {"label": label, "secret": secret, "set": bool(value), "source": source,
-                                 "hint": _hint(value) if value else ""}
+                                 "hint": _hint(value) if value else "",
+                                 "optional": field in OPTIONAL_FIELDS.get(broker, frozenset())}
         brokers[broker] = {"label": BROKER_LABELS[broker], "fields": out_fields,
-                           "complete": all(v["set"] for v in out_fields.values()),
+                           "complete": all(v["set"] for v in out_fields.values() if not v["optional"]),
                            "updated_at": (saved.get("_meta") or {}).get(broker)}
     return {"unlocked": locked_error is None and is_unlocked(), "lock_reason": locked_error
             or (None if is_unlocked() else "CREDENTIALS_KEY is not set on the server"), "brokers": brokers}
@@ -212,6 +220,25 @@ def _clean(broker: str, values: Dict[str, str]) -> Dict[str, str]:
             raise InvalidInput(f"{field} is not a valid value")
         cleaned[field] = value
     return cleaned
+
+
+def _clean_kite_field(field: str, value: str) -> str:
+    label = BROKERS["kite"][field][1]
+    if field == "user_id":
+        value = value.upper()
+        if not (value.isalnum() and 4 <= len(value) <= 12):
+            raise InvalidInput(f"{label} should look like AB1234")
+    elif field == "totp_secret":
+        import base64
+        import binascii
+        value = value.replace(" ", "").upper()
+        try:
+            base64.b32decode(value + "=" * (-len(value) % 8))
+        except (binascii.Error, ValueError):
+            raise InvalidInput(f"{label} is not valid — paste the key shown under 'Can't scan the QR code?'")
+        if len(value) < 16:
+            raise InvalidInput(f"{label} looks too short — paste the full key, not a 6-digit code")
+    return value
 
 
 def save(broker: str, values: Dict[str, str], actor: str = "dashboard") -> List[str]:

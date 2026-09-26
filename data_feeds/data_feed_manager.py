@@ -261,6 +261,9 @@ class DataFeedManager:
         self._startup_feed_validation()
         # Pick up broker credential changes from the dashboard Settings page without a restart
         self._start_credential_watch()
+        # Automatic daily Zerodha login (only when user ID / password / TOTP are saved in Settings)
+        from broker_auth import kite_autologin
+        kite_autologin.start_scheduler(lambda: not self.kite.is_live)
 
     # ── Broker credential hot-reload (dashboard Settings page) ────────────
 
@@ -314,10 +317,11 @@ class DataFeedManager:
 
     def _startup_feed_validation(self) -> None:
         """Log a structured feed validation block at startup."""
-        from broker_auth import kite_session
+        from broker_auth import kite_autologin, kite_session
         if kite_session.is_configured():
             log.info("[FeedValidation] Kite feed (PRIMARY when connected): connected=%s — "
-                     "log in daily via the dashboard's Connect Zerodha button.", self.kite.is_live)
+                     "automatic daily login=%s (else use the dashboard's Connect Zerodha button).",
+                     self.kite.is_live, kite_autologin.is_enabled())
         # Dhan is primary — always log its status first
         state = self.dhan.auth_state()
         if not state["token_present"]:

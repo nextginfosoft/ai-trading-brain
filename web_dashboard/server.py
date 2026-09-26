@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from broker_auth import connection_tests, credentials, kite_session
+from broker_auth import connection_tests, credentials, kite_autologin, kite_session
 from web_dashboard import auth, data
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -218,7 +218,17 @@ def _kite_redirect(outcome: str, reason: str = "") -> RedirectResponse:
 
 @app.get("/api/kite/status")
 def kite_status() -> dict:
-    return kite_session.public_status()
+    return {**kite_session.public_status(), "auto_login": kite_autologin.public_status()}
+
+
+@app.post("/api/kite/auto-login")
+def kite_auto_login() -> JSONResponse:
+    """Run the automatic Zerodha login now (needs user ID, password and TOTP secret in Settings)."""
+    if not kite_autologin.is_enabled():
+        return JSONResponse({"ok": False, "message": "Save the Zerodha user ID, password and TOTP secret first"},
+                            status_code=400)
+    result = kite_autologin.login(actor="dashboard")
+    return JSONResponse({**result, "status": kite_status()}, status_code=200 if result["ok"] else 502)
 
 
 @app.post("/api/kite/login")
@@ -244,6 +254,8 @@ def kite_callback(request_token: str = "", status: str = "", state: str = "") ->
         return _kite_redirect("error", "Zerodha login was cancelled or failed")
     try:
         kite_session.exchange_request_token(request_token)
+    except kite_session.WrongAccount as exc:
+        return _kite_redirect("error", str(exc))
     except Exception as exc:  # network / invalid token / wrong secret
         return _kite_redirect("error", f"Token exchange failed: {type(exc).__name__}")
     return _kite_redirect("connected")

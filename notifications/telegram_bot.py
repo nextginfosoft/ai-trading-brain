@@ -266,11 +266,28 @@ class TelegramCommandBot:
                 if self._running:
                     log.warning("[TelegramBot] Reminder loop error: %s", exc, exc_info=True)
 
+    @staticmethod
+    def _kite_auto_login_note() -> str:
+        """One line about the automatic Zerodha login, for the not-connected reminders."""
+        try:
+            from broker_auth import kite_autologin
+            st = kite_autologin.public_status()
+        except Exception:
+            return ""
+        if not st["enabled"]:
+            return ""
+        if st["blocked"]:
+            return f"⛔ Automatic login is paused: {_esc(st['message'])}\nFix the values in Settings.\n\n"
+        if st["last_attempt"] and not st["ok"]:
+            return f"⚠️ Automatic login failed: {_esc(st['message'])}\n\n"
+        return "Automatic login is on (tries from 08:00 IST).\n\n"
+
     def _kite_reminders(self, connected: bool, startup_done: bool, reminded_am: str,
                         reminded_open: str, today: str, weekday: int, h: int, m: int):
         """Startup status + 08:30 / 09:15 weekday reminders to do the daily Zerodha login."""
         url = os.getenv("DASHBOARD_PUBLIC_URL", "").strip()
         where = f'<a href="{_esc(url)}">{_esc(url)}</a>' if url else "the TradeSense dashboard"
+        auto_note = self._kite_auto_login_note()
 
         if not startup_done:
             if connected:
@@ -279,6 +296,7 @@ class TelegramCommandBot:
                 self.push("🔑 <b>TradeSense AI is online!</b>\n"
                           "━━━━━━━━━━━━━━━━━━━━━\n"
                           "Zerodha is <b>not connected</b> — using fallback market data.\n\n"
+                          f"{auto_note}"
                           f"Open {where} and click <b>Connect Zerodha</b>.")
             log.info("[TelegramBot] Startup Zerodha status sent (connected=%s).", connected)
             return True, reminded_am, reminded_open
@@ -290,6 +308,7 @@ class TelegramCommandBot:
             self.push("🔑 <b>Good morning! Zerodha login needed.</b>\n"
                       "━━━━━━━━━━━━━━━━━━━━━\n"
                       "Kite sessions expire every morning (Zerodha rule).\n\n"
+                      f"{auto_note}"
                       f"Open {where} → <b>Connect Zerodha</b> → log in.\n"
                       "Market opens at <b>09:15 IST</b>. 🕘")
             log.info("[TelegramBot] 08:30 Zerodha login reminder sent.")
